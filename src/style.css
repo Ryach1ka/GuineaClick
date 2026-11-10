@@ -307,7 +307,8 @@ body.fever #pigSvg .blush{opacity:.8}
 
 /* 寒そうなモルモット（--cold は 0〜1。winterui.js が夜の進み具合で変える） */
 :root{--cold:0; --shiver:0}
-#pigSvg .ice{opacity:calc(var(--cold) * .45); mix-blend-mode:screen}
+#pigSvg .ice{opacity:calc(var(--cold) * .45); mix-blend-mode:screen; transition:opacity .8s}
+#pigSvg .snowcap, #pigSvg .blush{transition:opacity .8s, transform .8s}
 #pigSvg .snowcap{opacity:clamp(0, calc(var(--cold) * 1.8 - .35), 1); transform-box:fill-box; transform-origin:50% 100%; transform:scaleY(clamp(.3, calc(var(--cold) * 1.3), 1)); filter:drop-shadow(0 1px 1px rgba(120,170,220,.6))}
 #pigSvg .blush{opacity:calc(.38 + var(--cold) * .45)}
 /* ぶるぶる：寒いほど大きく・ひんぱんに震える */
@@ -371,4 +372,22 @@ body.freezing #pigSvg .squash{transform:translateY(3px) scale(1.03,.95)}
   .banner.show{animation:none; opacity:1; transform:translate(-50%,-50%)}
   .fx-label{animation-duration:.01s}
   .fly{animation-duration:.01s} #pig{transition:none}
+}
+
+/* 作戦タイムがわかるように（夜が明けて朝の色・なでても 💤・帯とボタンを目立たせる） */
+.stage{transition:background-color .8s}
+body.daytime .stage{background:linear-gradient(180deg, rgba(255,214,140,.22), rgba(255,240,200,.08) 60%, transparent)}
+body.daytime .score .n{opacity:.75}
+#rate.resting{color:#d08a2c; font-weight:700}
+.fly.rest{color:var(--muted); font-size:1.3rem; opacity:.9}
+.breakbar.enter{animation:barIn .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes barIn{from{opacity:0; transform:translateY(-16px) scale(.9)}}
+.breakbar.nudge{animation:nudgeBar .9s ease-out}
+@keyframes nudgeBar{0%,100%{box-shadow:0 6px 18px var(--shadow)} 30%{box-shadow:0 0 0 4px var(--heart), 0 6px 18px var(--shadow)}}
+#nightBtn.nudge{animation:nudgeBtn .3s ease-in-out 3}
+@keyframes nudgeBtn{50%{transform:scale(1.08)}}
+/* 開いた直後のカードは押せない（夜の終わりに連打していて、うっかり選ばないように） */
+.draft-list.arming .draft-item{pointer-events:none}
+@media (prefers-reduced-motion: reduce){
+  .breakbar.enter,.breakbar.nudge,#nightBtn.nudge{animation:none}
 }

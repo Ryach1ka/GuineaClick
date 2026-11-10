@@ -78,9 +78,11 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     } else { lastSecond = null; }
 
     // 寒さ：夜が進むほど霜と雪が濃くなり、モルモットも寒そうになる
-    //   作戦タイムでも冬なので少しだけ寒い。ごきげんタイム中はぽかぽか
+    //   作戦タイムでも冬なので少しだけ寒い。ごきげんタイム中と、ノルマに届いているあいだはぽかぽか
+    //   （まわりの霜と雪はそのまま。寒がるのはモルモットだけやめる）
     const cold = night ? 1 - left / total : 0;
-    const pigCold = game.buffLeft() > 0 ? 0.1 : (night ? 0.2 + cold * 0.8 : 0.15);
+    const warm = game.buffLeft() > 0 || (night && enough);
+    const pigCold = warm ? 0.1 : (night ? 0.2 + cold * 0.8 : 0.15);
     const root = document.documentElement.style;
     root.setProperty('--cold', pigCold.toFixed(3));
     root.setProperty('--shiver', (1 + pigCold * 2.5).toFixed(2));
@@ -90,9 +92,15 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     snow.style.opacity = night ? (0.25 + cold * 0.75).toFixed(3) : '0.15';
     document.body.classList.toggle('boss', n >= game.nightCount() && night);
 
-    // 作戦タイムの帯
+    // 作戦タイムの帯（出てくるときに弾ませる）。作戦タイム中はステージを朝の色にする
     const isBreak = r.phase === 'break';
+    if (isBreak && breakBar.hidden) {
+      breakBar.classList.remove('enter');
+      void breakBar.offsetWidth;
+      breakBar.classList.add('enter');
+    }
     breakBar.hidden = !isBreak;
+    document.body.classList.toggle('daytime', isBreak);
     pauseBtn.disabled = !night;
     if (isBreak) {
       $('breakTitle').textContent = n === 1 && r.playMs === 0 ? '❄️ 冬がくる…' : '☀️ 作戦タイム';
@@ -144,8 +152,17 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     if (document.visibilityState === 'hidden' && game.isNight()) { setPaused(true); }
   });
 
+  // 「次の夜へ」ボタンと作戦タイムの帯を光らせて目立たせる
+  function nudge() {
+    [breakBar, nightBtn].forEach((el) => {
+      el.classList.remove('nudge');
+      void el.offsetWidth;
+      el.classList.add('nudge');
+    });
+  }
+
   // 今の寒さ（0〜1）。白い息の大きさなどに使う
   const coldness = () => parseFloat(document.documentElement.style.getPropertyValue('--cold')) || 0;
 
-  return { render, show, setPaused, isPaused: () => paused, coldness };
+  return { render, show, setPaused, isPaused: () => paused, coldness, nudge };
 }

@@ -14,6 +14,8 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
   const endPanel = $('endPanel');
   const panels = [draftPanel, homePanel, endPanel];
   let lastFocus = null;
+  let armedAt = 0;      // この時刻まではおやつカードを押せない
+  let armTimer = null;
 
   const tagChip = (t) => `${data.tagInfo[t].icon}${data.tagInfo[t].name}`;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -89,6 +91,11 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
       b.addEventListener('click', () => pick(c, b));
       draftList.appendChild(b);
     });
+    // 開いた直後の 0.7 秒は押せない（夜の終わりまで連打していて、うっかり選ばないように）
+    armedAt = Date.now() + 700;
+    draftList.classList.add('arming');
+    clearTimeout(armTimer);
+    armTimer = setTimeout(() => draftList.classList.remove('arming'), 700);
     const left = game.rerollsLeft();
     rerollBtn.hidden = game.metaLevel('reroll') === 0;
     rerollBtn.disabled = left <= 0;
@@ -98,6 +105,7 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
   }
 
   function pick(c, b) {
+    if (Date.now() < armedAt) { return; }
     if (!game.pickCard(c.id)) { return; }
     const from = centerOf(b, 0.5, 0.3);
     sound.card();

@@ -29,6 +29,7 @@ export function startUI({ data, game, store }) {
   let lockedBtn = null;    // 次に解放される品物の「？？？」ボタン
   let bubbleTimer = null;
   let wasFever = false;
+  let restTaps = 0;        // 作戦タイム中になでた回数（知らせるタイミング用）
   const settings = store.loadSettings();
   const sound = createSound({
     sfxOn: () => settings.sound, bgmOn: () => settings.bgm,
@@ -182,7 +183,10 @@ export function startUI({ data, game, store }) {
     const fever = left > 0;
     let txt = '(毎秒 ' + fmt(game.perSec()) + ' / タップ +' + fmt(game.clickPower()) + ')';
     if (fever) { txt += ' ✨×' + data.golden.buffMult + ' あと' + Math.ceil(left / 1000) + '秒'; }
+    // 夜じゃないときは、ハートが増えないことを数字の下にはっきり書く
+    if (!game.isNight()) { txt = game.isOver() ? '' : '☀️ 作戦タイム中はハートは増えないよ'; }
     rateEl.textContent = txt;
+    rateEl.classList.toggle('resting', !game.isNight());
     if (fever !== wasFever) {
       document.body.classList.toggle('fever', fever);
       pigCtl.setFever(fever);
@@ -333,13 +337,27 @@ export function startUI({ data, game, store }) {
   }
 
   function onPet(ev, { drag = false } = {}) {
-    // 夜じゃないとき（作戦タイム）はハートは出ない。モルモットは反応だけする
+    // 夜じゃないとき（作戦タイム）はハートは出ない。♥ の代わりに灰色の 💤 を出して、
+    // 何回かなでたら「いまは作戦タイム」と知らせ、次の夜へのボタンを光らせる
     if (!game.isNight()) {
-      animatePig();
-      sound.squeak();
-      if (Math.random() < 0.3) { sayLine(data.restWords[Math.floor(Math.random() * data.restWords.length)]); }
+      const rect = stage.getBoundingClientRect();
+      const x = (ev.clientX || rect.left + rect.width / 2) - rect.left;
+      const y = (ev.clientY || rect.top + rect.height / 2) - rect.top;
+      flyText(x, y, '💤', 'rest');
+      pig.classList.add('press');
+      setTimeout(() => pig.classList.remove('press'), 110);
+      sound.rest();
+      restTaps += 1;
+      if (restTaps === 3 || restTaps % 12 === 0) {
+        sayLine('いまは作戦タイム');
+        if (game.run.phase === 'break') {
+          toast('☀️ いまは作戦タイム', 'なでてもハートは出ないよ。準備ができたら次の夜へ！');
+          winterUI.nudge();
+        }
+      }
       return;
     }
+    restTaps = 0;
     const gain = game.pet({ drag });
     renderCount();
     counter.pop(gain);
