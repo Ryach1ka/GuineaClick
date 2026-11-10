@@ -16,9 +16,15 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
   const pausePanel = $('pausePanel');
   const pauseBtn = $('pauseBtn');
   const clearBtn = $('clearBtn');
+  const quotaText = $('quotaText');
+  const quotaGauge = $('quotaGauge');
+  const coldGauge = $('coldGauge');
   let paused = false;
   let lastSecond = null;
   let reachedNight = 0; // ノルマ達成を知らせた夜（1夜に1回だけ知らせる）
+  const BREAK_DELAY_MS = 2000;
+  let prevPhase = game.run.phase;
+  let breakShowAt = 0;  // この時刻になったら作戦タイムの帯を出す
 
   // ノルマに届いたら、残り時間を待たずに夜をおえられる（このまま粘って次の夜のために貯めてもいい）
   clearBtn.addEventListener('click', () => { if (game.canEndEarly()) { onEndEarly(); } });
@@ -50,13 +56,19 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     const enough = game.state.count >= q;
 
     nightLabel.textContent = `${nightName(n)}　${Math.min(n, game.nightCount())}/${game.nightCount()}`;
-    quotaLabel.textContent = `${enough ? '✅' : '❄️'} ノルマ ♥${fmt(q)}`;
+    // ノルマ：あといくつか・集めた量 / ノルマ（届いたら緑）
+    const have = Math.floor(game.state.count);
+    quotaLabel.textContent = enough ? '✅ ノルマ達成！' : `あと ♥${fmt(q - have)}`;
     quotaLabel.classList.toggle('ok', enough);
-    quotaFill.style.width = (Math.min(1, game.state.count / q) * 100).toFixed(1) + '%';
-    quotaFill.classList.toggle('ok', enough);
+    quotaText.textContent = `♥${fmt(have)} / ♥${fmt(q)}`;
+    quotaFill.style.width = (Math.min(1, have / q) * 100).toFixed(1) + '%';
+    quotaGauge.classList.toggle('ok', enough);
+    quotaGauge.setAttribute('aria-valuenow', String(have));
+    quotaGauge.setAttribute('aria-valuemax', String(q));
+    // 寒波：時間がたつほど左から青いゲージが伸びる（作戦タイム中は止まっている）
     const left = night ? r.timeLeft : total;
-    timeLabel.textContent = night ? mmss(left) : '⏸ ' + mmss(total);
-    timeFill.style.width = ((left / total) * 100).toFixed(1) + '%';
+    timeLabel.textContent = night ? `❄️ 寒波まで ${mmss(left)}` : `⏸ 夜は ${Math.round(total / 1000)}秒`;
+    timeFill.style.width = ((1 - left / total) * 100).toFixed(1) + '%';
 
     // ノルマ達成：「夜をおえる」ボタンを出す。初めて届いた瞬間はお知らせ
     const canEnd = game.canEndEarly();
@@ -72,6 +84,7 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     // 残り10秒はあせらせる（毎秒チクタク）
     const hurry = night && left <= 10000;
     winter.classList.toggle('hurry', hurry && !enough);
+    coldGauge.classList.toggle('hurry', hurry && !enough);
     if (hurry && !paused) {
       const sec = Math.ceil(left / 1000);
       if (sec !== lastSecond) { lastSecond = sec; if (!enough) { sound.tick(); } }
@@ -93,13 +106,17 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     document.body.classList.toggle('boss', n >= game.nightCount() && night);
 
     // 作戦タイムの帯（出てくるときに弾ませる）。作戦タイム中はステージを朝の色にする
+    //   夜が終わった直後は「のりこえた！」やカード選択と重ならないよう、いったん消して約2秒後に出す
     const isBreak = r.phase === 'break';
-    if (isBreak && breakBar.hidden) {
+    if (isBreak && prevPhase === 'night') { breakShowAt = Date.now() + BREAK_DELAY_MS; }
+    prevPhase = r.phase;
+    const showBar = isBreak && Date.now() >= breakShowAt;
+    if (showBar && breakBar.hidden) {
       breakBar.classList.remove('enter');
       void breakBar.offsetWidth;
       breakBar.classList.add('enter');
     }
-    breakBar.hidden = !isBreak;
+    breakBar.hidden = !showBar;
     document.body.classList.toggle('daytime', isBreak);
     pauseBtn.disabled = !night;
     if (isBreak) {

@@ -58,4 +58,6 @@ export function setupMixer({ settings, store, sound }) {
   });
 
   render();
+  // メニューの「音の設定」から開く
+  return { open: () => { setOpen(true); const s = panel.querySelector('input'); if (s) { s.focus(); } } };
 }

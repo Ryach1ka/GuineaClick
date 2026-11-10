@@ -37,7 +37,10 @@ export function createStore(storage = defaultStorage()) {
     };
   }
 
+  let wiped = false; // データを消したあとは、もう書き込まない（ページを閉じるときの自動セーブで書き戻さないように）
+
   function write(game) {
+    if (wiped) { return; }
     set(KEY_COUNT, String(game.state.count));
     set(KEY_OWNED, JSON.stringify(game.state.owned));
     set(KEY_UPGRADES, JSON.stringify(game.state.upgrades));
@@ -50,12 +53,21 @@ export function createStore(storage = defaultStorage()) {
     const s = readJSON(KEY_SETTINGS) || {};
     // sound: 効果音、bgm: BGM（どちらも最初はオン）。音量は 0〜1 で最初は 0.5
     const vol = (v) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : 0.5);
-    return { sound: s.sound !== false, bgm: s.bgm !== false, sfxVol: vol(s.sfxVol), bgmVol: vol(s.bgmVol) };
+    // seenHelp: 「あそびかた」を一度見たか
+    return { sound: s.sound !== false, bgm: s.bgm !== false, sfxVol: vol(s.sfxVol), bgmVol: vol(s.bgmVol), seenHelp: s.seenHelp === true };
   }
 
   function writeSettings(settings) {
     set(KEY_SETTINGS, JSON.stringify(settings));
   }
 
-  return { load, write, loadSettings, writeSettings };
+  // ゲームのデータをすべて消す（音の設定は残す）。このあとは write しても何も書かない
+  function wipe() {
+    wiped = true;
+    [KEY_COUNT, KEY_OWNED, KEY_STATS, KEY_UPGRADES, KEY_RUN, KEY_META, 'morumotto:lastSeen'].forEach((k) => {
+      try { if (storage) { storage.removeItem(k); } } catch (e) { /* 何もしない */ }
+    });
+  }
+
+  return { load, write, loadSettings, writeSettings, wipe };
 }

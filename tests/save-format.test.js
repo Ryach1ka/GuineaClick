@@ -10,6 +10,7 @@ function memoryStorage(initial = {}) {
   return {
     getItem: (k) => (m.has(k) ? m.get(k) : null),
     setItem: (k, v) => { m.set(k, String(v)); },
+    removeItem: (k) => { m.delete(k); },
     dump: () => Object.fromEntries(m)
   };
 }
@@ -61,14 +62,14 @@ describe('セーブ', () => {
 
   it('効果音も BGM も最初はオン、音量は 50%', () => {
     const s = createStore(memoryStorage());
-    expect(s.loadSettings()).toEqual({ sound: true, bgm: true, sfxVol: 0.5, bgmVol: 0.5 });
+    expect(s.loadSettings()).toEqual({ sound: true, bgm: true, sfxVol: 0.5, bgmVol: 0.5, seenHelp: false });
     s.writeSettings({ sound: false, bgm: false, sfxVol: 0.2, bgmVol: 0.9 });
-    expect(s.loadSettings()).toEqual({ sound: false, bgm: false, sfxVol: 0.2, bgmVol: 0.9 });
+    expect(s.loadSettings()).toEqual({ sound: false, bgm: false, sfxVol: 0.2, bgmVol: 0.9, seenHelp: false });
   });
 
   it('設定が足りない古いセーブや変な値でも、足りない分は初期値になる', () => {
     const s = createStore(memoryStorage({ 'morumotto:settings': '{"sound":false,"bgmVol":7}' }));
-    expect(s.loadSettings()).toEqual({ sound: false, bgm: true, sfxVol: 0.5, bgmVol: 0.5 });
+    expect(s.loadSettings()).toEqual({ sound: false, bgm: true, sfxVol: 0.5, bgmVol: 0.5, seenHelp: false });
   });
 
   it('冬の途中の状態（何夜目・残り時間・カード）と思い出も保存される', () => {
@@ -102,5 +103,22 @@ describe('数の表示', () => {
     expect(f(99999999)).toBe('9,999万');
     expect(f(450000000)).toBe('4.5億');
     expect(f(2e12)).toBe('2兆');
+  });
+});
+
+describe('データを消す', () => {
+  it('ゲームのデータは消えて、音の設定は残る。消したあとは書き込まれない', () => {
+    const storage = memoryStorage();
+    const s = createStore(storage);
+    const g = createGame(data);
+    g.init({ count: 0, owned: {}, stats: null });
+    g.meta.memories = 9;
+    s.write(g);
+    s.writeSettings({ sound: false, bgm: true, sfxVol: 0.3, bgmVol: 0.5, seenHelp: true });
+    s.wipe();
+    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null });
+    expect(s.loadSettings().sfxVol).toBe(0.3);
+    s.write(g); // ページを閉じるときの自動セーブ
+    expect(s.load().meta).toBe(null);
   });
 });

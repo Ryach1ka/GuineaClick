@@ -2,7 +2,7 @@
 
 import { burst, confetti, flyIcon, centerOf } from './effects.js';
 
-export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChange, onNewGame, onGiveUp }) {
+export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChange, onNewGame }) {
   const $ = (id) => document.getElementById(id);
   const giftBtn = $('giftBtn');
   const giftCount = $('giftCount');
@@ -148,7 +148,6 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
       (h.length
         ? '<ol>' + h.slice(0, 5).map((x) => `<li>${x.win ? '🌸 成功' : `🥶 ${x.nights}夜`}・♥${fmt(x.earned)}・💭${x.memories}　${x.cards.map((id) => (data.cards.find((c) => c.id === id) || {}).icon || '').join('')}</li>`).join('') + '</ol>'
         : '<p class="empty">まだ記録はありません</p>');
-    $('giveUp').hidden = game.isOver();
   }
 
   $('metaShop').addEventListener('click', (e) => {
@@ -165,26 +164,9 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
     }
   });
 
+  // 🏡 は ☰ メニューから開く（menu.js）
   function openHome() { renderHome(); openPanel(homePanel); }
-  $('homeBtn').addEventListener('click', openHome);
   $('homeClose').addEventListener('click', () => closePanel(homePanel));
-
-  // 2回押しであきらめる（間違えて押さないように）
-  const giveUp = $('giveUp');
-  let giveUpTimer = null;
-  giveUp.addEventListener('click', () => {
-    if (!giveUp.classList.contains('confirm')) {
-      giveUp.classList.add('confirm');
-      giveUp.textContent = 'ほんとうに？ もう一度押すとあきらめる';
-      giveUpTimer = setTimeout(() => { giveUp.classList.remove('confirm'); giveUp.textContent = 'この冬をあきらめる'; }, 4000);
-      return;
-    }
-    clearTimeout(giveUpTimer);
-    giveUp.classList.remove('confirm');
-    giveUp.textContent = 'この冬をあきらめる';
-    closePanel(homePanel);
-    onGiveUp();
-  });
 
   // ---------- 冬の結果 ----------
   function showEnd(result) {
@@ -211,5 +193,10 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
   $('endHome').addEventListener('click', () => { renderHome(); homePanel.classList.add('open'); });
 
   refreshGift();
-  return { refreshGift, openDraft, showEnd, openHome, anyOpen };
+  // 新しい冬を始めるときに、前の冬のカード選択や結果を閉じる
+  function closeRunPanels() {
+    [draftPanel, endPanel].forEach((p) => p.classList.remove('open'));
+  }
+
+  return { refreshGift, openDraft, showEnd, openHome, anyOpen, closeRunPanels };
 }

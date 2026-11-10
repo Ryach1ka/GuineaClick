@@ -27,8 +27,7 @@
   </div>
   <div class="group">
     <button id="pauseBtn" type="button" aria-label="一時停止">⏸</button>
-    <button id="homeBtn" type="button" aria-label="思い出ショップと記録">🏡</button>
-    <button id="achBtn" type="button">🏆 0/0</button>
+    <button id="menuBtn" type="button" aria-label="メニュー" aria-haspopup="dialog">☰</button>
   </div>
 </div>
 
@@ -36,11 +35,29 @@
 <div class="winter" id="winter">
   <div class="w-row">
     <span class="w-night" id="nightLabel">🌙 1夜目</span>
-    <span class="w-quota" id="quotaLabel">❄️ ノルマ ♥40</span>
-    <span class="w-time" id="timeLabel">1:00</span>
+    <span class="w-quota" id="quotaLabel">あと ♥40</span>
   </div>
-  <div class="w-bar" aria-hidden="true"><div class="w-fill" id="quotaFill"></div><div class="w-time-fill" id="timeFill"></div></div>
+  <!-- ノルマ：集めたハート / ノルマ（届いたら緑） -->
+  <div class="gauge g-quota" role="meter" aria-label="ノルマ" id="quotaGauge">
+    <div class="g-fill" id="quotaFill"></div>
+    <span class="g-tag">ノルマ</span>
+    <span class="g-text" id="quotaText">♥0 / ♥40</span>
+  </div>
+  <!-- 寒波：時間がたつほど左から青く迫ってくる -->
+  <div class="gauge g-cold" role="timer" aria-label="寒波までの残り時間" id="coldGauge">
+    <div class="g-fill" id="timeFill"></div>
+    <span class="g-tag">寒波</span>
+    <span class="g-text" id="timeLabel">❄️ 寒波まで 1:00</span>
+  </div>
   <button id="clearBtn" type="button" class="clear-btn" hidden>✅ ノルマ達成！ 夜をおえる ▶</button>
+  <!-- 作戦タイム：夜と夜のあいだ（時間は止まっている）。メーターの中に出すので、数字やモルモットと重ならない -->
+  <div class="breakbar" id="breakBar" hidden>
+    <div class="bb-text"><b id="breakTitle">☀️ 作戦タイム</b><small id="breakSub"></small></div>
+    <div class="bb-btns">
+      <button id="giftBtn" type="button" class="gift" hidden>🎁 <span id="giftCount">1</span></button>
+      <button id="nightBtn" type="button" class="primary">🌙 1夜目へ</button>
+    </div>
+  </div>
 </div>
 
 <div class="score">
@@ -55,14 +72,6 @@
   <div class="snow" id="snow" aria-hidden="true"></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <div class="banner" id="banner" aria-live="assertive"></div>
-  <!-- 作戦タイム：夜と夜のあいだ（時間は止まっている） -->
-  <div class="breakbar" id="breakBar" hidden>
-    <div class="bb-text"><b id="breakTitle">☀️ 作戦タイム</b><small id="breakSub"></small></div>
-    <div class="bb-btns">
-      <button id="giftBtn" type="button" class="gift" hidden>🎁 <span id="giftCount">1</span></button>
-      <button id="nightBtn" type="button" class="primary">🌙 1夜目へ</button>
-    </div>
-  </div>
   <button id="pig" aria-label="モルモットをなでる">
     <span class="bubble" id="bubble">プイプイ</span>
     <svg id="pigSvg" viewBox="0 0 340 260" aria-hidden="true">
@@ -202,7 +211,40 @@
     <ul class="metashop" id="metaShop"></ul>
     <h3>記録</h3>
     <div class="records" id="records"></div>
-    <button id="giveUp" type="button" class="secondary wide">この冬をあきらめる</button>
+  </div>
+</div>
+
+<!-- ☰ メニュー -->
+<div class="overlay" id="menuPanel" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+  <div class="card menu-card">
+    <h2><span id="menuTitle">☰ メニュー</span><button id="menuClose" type="button" aria-label="閉じる">✕</button></h2>
+    <div class="menu-list">
+      <button id="menuResume" type="button" class="menu-item primary-item">▶ つづける</button>
+      <button id="helpBtn" type="button" class="menu-item">📖 あそびかた</button>
+      <button id="homeBtn" type="button" class="menu-item">🏡 思い出ショップ・記録 <span class="mi-sub" id="menuMem"></span></button>
+      <button id="achBtn" type="button" class="menu-item">🏆 実績 0/0</button>
+      <button id="menuSound" type="button" class="menu-item">🔊 音の設定</button>
+      <button id="restartBtn" type="button" class="menu-item warn">🔄 この冬をやり直す <span class="mi-sub">越えた夜の分の思い出はもらえます</span></button>
+      <button id="wipeBtn" type="button" class="menu-item danger">🗑️ データをすべて消して最初から <span class="mi-sub">思い出・実績・記録もすべて消えます</span></button>
+    </div>
+    <p class="menu-foot" id="menuFoot"></p>
+  </div>
+</div>
+
+<!-- 📖 あそびかた -->
+<div class="overlay" id="helpPanel" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="card help-card">
+    <h2><span id="helpTitle">📖 あそびかた</span><button id="helpClose" type="button" aria-label="閉じる">✕</button></h2>
+    <ol class="help-list">
+      <li><span class="hi">❄️</span><span><b>寒波が5回やってくる</b>夜（60秒）のあいだに、モルモットをなでてハート ♥ を集めよう。</span></li>
+      <li><span class="hi">🧺</span><span><b>夜の終わりにノルマを払う</b>上のゲージのノルマ分のハートを払えたら、その夜は越えられる。届いたら「夜をおえる」で先に進んでもOK。</span></li>
+      <li><span class="hi">🛒</span><span><b>ハートで買い物</b>牧草・にんじん・なかま…で、ハートがもっと集まるように。でも使いすぎるとノルマが払えないかも？</span></li>
+      <li><span class="hi">🎁</span><span><b>夜を越えたらおやつカード</b>3枚から1枚えらぶ。同じ種類（🥕🐹👆✨🏠）を重ねると強くなる！</span></li>
+      <li><span class="hi">🥕</span><span><b>きんのにんじん</b>ときどき出てくる。拾うとハートがどっさり、か「ごきげんタイム」でしばらく何倍にも。</span></li>
+      <li><span class="hi">💭</span><span><b>負けても思い出が残る</b>越えた夜の数だけ思い出がもらえる。🏡 思い出ショップで次の冬を楽にしよう。5夜すべて越えたら冬ごもり成功！</span></li>
+    </ol>
+    <p class="help-tip">夜のあいだは ⏸ で止められます。作戦タイム（夜と夜のあいだ）は時間が止まっているので、ゆっくり作戦を立ててね。</p>
+    <button id="helpOk" type="button" class="primary wide">わかった！</button>
   </div>
 </div>
 

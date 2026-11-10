@@ -60,7 +60,7 @@ body.fever{background:var(--fever-bg)}
 }
 body.fever .score .n{color:var(--gold)}
 .score .l{font-size:1rem; color:var(--muted); margin-top:.3rem; padding:0 .5rem}
-.stage{flex:1; min-height:200px; width:100%; max-width:520px; position:relative; display:flex; align-items:flex-end; justify-content:center}
+.stage{flex:1; min-height:200px; width:100%; max-width:520px; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end}
 .ground{position:absolute; left:0; right:0; bottom:0; height:34%; background:var(--ground); border-radius:50% 50% 0 0 / 28% 28% 0 0}
 #herd, #decor{position:absolute; inset:0; pointer-events:none}
 .decor{position:absolute}
@@ -115,19 +115,25 @@ body.fever .score .n{color:var(--gold)}
 .winter{width:min(520px, calc(100% - 32px)); margin-top:3.3rem; background:var(--bubble); border-radius:14px; padding:.45rem .7rem .55rem; box-shadow:0 2px 8px var(--shadow); z-index:3}
 .w-row{display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; font-weight:700; font-size:.88rem}
 .w-night{white-space:nowrap}
-.w-quota{color:#4d8fd6; white-space:nowrap}
+.w-quota{color:var(--heart); white-space:nowrap}
 .w-quota.ok{color:#3f9b52}
-.w-time{font-variant-numeric:tabular-nums; font-size:1.05rem; min-width:3.2rem; text-align:right}
-.w-bar{position:relative; height:10px; margin-top:.35rem; background:var(--bg); border-radius:999px; overflow:hidden}
-.w-fill{position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg, #ff9ab0, var(--heart)); border-radius:999px; transition:width .2s}
-.w-fill.ok{background:linear-gradient(90deg, #8fd673, #3f9b52)}
-.w-time-fill{position:absolute; left:0; bottom:0; height:3px; width:100%; background:#8ec5ff; transition:width .1s linear}
+/* ゲージ（ノルマと寒波）。太めにして、中に文字を入れる */
+.gauge{position:relative; height:24px; margin-top:.35rem; background:var(--bg); border-radius:999px; overflow:hidden; display:flex; align-items:center; justify-content:space-between; padding:0 .7rem; font-weight:700; font-size:.8rem}
+.g-fill{position:absolute; left:0; top:0; bottom:0; width:0; border-radius:999px; transition:width .2s}
+.g-tag, .g-text{position:relative; z-index:1; white-space:nowrap; font-variant-numeric:tabular-nums}
+.g-tag{font-size:.72rem; opacity:.85}
+.g-quota .g-fill{background:linear-gradient(90deg, #ff9ab0, var(--heart))}
+.g-quota.ok .g-fill{background:linear-gradient(90deg, #8fd673, #3f9b52)}
+.g-quota .g-text, .g-quota .g-tag{color:var(--ink); text-shadow:0 0 3px var(--bubble), 0 0 3px var(--bubble)}
+.g-cold .g-fill{background:linear-gradient(90deg, #d6ecff, #8ec5ff 60%, #4d8fd6); transition:width .1s linear}
+.g-cold .g-text, .g-cold .g-tag{color:var(--ink); text-shadow:0 0 3px var(--bubble), 0 0 3px var(--bubble)}
+.g-cold.hurry .g-fill{background:linear-gradient(90deg, #8ec5ff, #4d8fd6 60%, #d9534f)}
+.g-cold.hurry .g-text{color:#d9534f}
 .clear-btn{display:block; width:100%; margin-top:.45rem; font:inherit; font-weight:700; font-size:.95rem; color:#fff; background:linear-gradient(90deg, #5cb85c, #3f9b52); border:0; border-radius:999px; padding:.5rem 1rem; min-height:40px; cursor:pointer; box-shadow:0 3px 10px rgba(63,155,82,.35)}
 .clear-btn:focus-visible{outline:3px solid var(--ink); outline-offset:2px}
 .clear-btn.pop{animation:clearPop .5s cubic-bezier(.3,1.7,.5,1)}
 @keyframes clearPop{from{transform:scale(.6); opacity:0}}
 .winter.hurry{animation:hurry .5s ease-in-out infinite alternate}
-.winter.hurry .w-time{color:#d9534f}
 @keyframes hurry{to{box-shadow:0 0 0 3px #d9534f}}
 body.boss .winter{background:linear-gradient(90deg, var(--bubble), rgba(142,197,255,.35))}
 
@@ -152,7 +158,8 @@ body.frozen .frost{opacity:.9 !important}
 @keyframes bannerIn{0%{opacity:0; transform:translate(-50%,-50%) scale(.6)} 15%{opacity:1; transform:translate(-50%,-50%) scale(1.05)} 25%{transform:translate(-50%,-50%) scale(1)} 85%{opacity:1} 100%{opacity:0; transform:translate(-50%,-60%) scale(1)}}
 
 /* 作戦タイムの帯 */
-.breakbar{position:absolute; left:.6rem; right:.6rem; top:.4rem; z-index:7; display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; background:var(--bubble); border-radius:16px; padding:.55rem .7rem; box-shadow:0 6px 18px var(--shadow)}
+/* 寒波メーターのカードの中（ゲージの下）に置く。ハートの数字やモルモットの吹き出しと重ならない */
+.breakbar{margin-top:.45rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; background:linear-gradient(90deg, rgba(255,214,140,.25), rgba(255,240,200,.12)); border-radius:12px; padding:.45rem .6rem}
 .bb-text b{display:block; font-size:.95rem}
 .bb-text small{display:block; color:var(--muted); font-size:.78rem}
 .bb-btns{display:flex; gap:.4rem; align-items:center; margin-left:auto}
@@ -346,7 +353,8 @@ body.freezing #pigSvg .squash{transform:translateY(3px) scale(1.03,.95)}
 @keyframes float{0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-10px) rotate(8deg)}}
 
 /* お知らせ */
-.toasts{position:absolute; top:.3rem; left:50%; transform:translateX(-50%); width:min(calc(100vw - 32px),340px); display:grid; gap:.4rem; z-index:20; pointer-events:none}
+/* お知らせはステージの下側に出す（上は作戦タイムの帯や大きなお知らせと重なるので） */
+.toasts{position:absolute; bottom:.4rem; left:50%; transform:translateX(-50%); width:min(calc(100vw - 32px),340px); display:grid; gap:.4rem; z-index:20; pointer-events:none}
 .toast{background:var(--bubble); color:var(--ink); border-radius:14px; padding:.55rem .9rem; text-align:center; font-size:.9rem; box-shadow:0 4px 14px var(--shadow); animation:toastIn .25s ease-out, toastOut .3s ease-in 2.4s forwards}
 .toast b{display:block; color:var(--heart)}
 @keyframes toastIn{from{opacity:0; transform:translateY(-10px)}}
@@ -383,7 +391,7 @@ body.daytime .score .n{opacity:.75}
 .breakbar.enter{animation:barIn .5s cubic-bezier(.3,1.6,.5,1)}
 @keyframes barIn{from{opacity:0; transform:translateY(-16px) scale(.9)}}
 .breakbar.nudge{animation:nudgeBar .9s ease-out}
-@keyframes nudgeBar{0%,100%{box-shadow:0 6px 18px var(--shadow)} 30%{box-shadow:0 0 0 4px var(--heart), 0 6px 18px var(--shadow)}}
+@keyframes nudgeBar{30%{box-shadow:0 0 0 3px var(--heart)}}
 #nightBtn.nudge{animation:nudgeBtn .3s ease-in-out 3}
 @keyframes nudgeBtn{50%{transform:scale(1.08)}}
 /* 開いた直後のカードは押せない（夜の終わりに連打していて、うっかり選ばないように） */
@@ -391,3 +399,24 @@ body.daytime .score .n{opacity:.75}
 @media (prefers-reduced-motion: reduce){
   .breakbar.enter,.breakbar.nudge,#nightBtn.nudge{animation:none}
 }
+
+/* ☰ メニュー */
+.card.menu-card{max-width:380px}
+.menu-list{display:grid; gap:.4rem; margin-top:.3rem}
+.menu-item{display:flex; flex-direction:column; align-items:flex-start; gap:.1rem; width:100%; text-align:left; font:inherit; font-weight:700; font-size:.95rem; color:var(--ink); background:var(--bubble); border:0; border-radius:12px; padding:.6rem .8rem; min-height:44px; cursor:pointer}
+.menu-item:hover{filter:brightness(1.05)}
+.menu-item:focus-visible{outline:3px solid var(--heart); outline-offset:2px}
+.menu-item.primary-item{background:var(--heart); color:#fff}
+.menu-item .mi-sub{font-size:.72rem; font-weight:500; color:var(--muted)}
+.menu-item.warn{border:2px solid #e0a43c}
+.menu-item.danger{border:2px solid #d9534f; color:#d9534f}
+.menu-item.confirm{background:#d9534f; color:#fff; border-color:#d9534f}
+.menu-foot{margin:.8rem 0 0; font-size:.72rem; color:var(--muted); text-align:center}
+
+/* 📖 あそびかた */
+.card.help-card{max-width:440px}
+.help-list{list-style:none; margin:.3rem 0 0; padding:0; display:grid; gap:.45rem}
+.help-list li{display:flex; gap:.6rem; align-items:flex-start; background:var(--bubble); border-radius:12px; padding:.55rem .7rem; font-size:.85rem; line-height:1.5}
+.help-list .hi{font-size:1.4rem; line-height:1.2}
+.help-list b{display:block; font-size:.92rem}
+.help-tip{font-size:.78rem; color:var(--muted); margin:.7rem 0 0}

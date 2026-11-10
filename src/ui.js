@@ -9,6 +9,8 @@ import { setupMixer } from './mixer.js';
 import { createCounter } from './counter.js';
 import { setupRunUI } from './runui.js';
 import { setupWinterUI } from './winterui.js';
+import { setupMenu } from './menu.js';
+import pkg from '../package.json';
 
 export function startUI({ data, game, store }) {
   const $ = (id) => document.getElementById(id);
@@ -59,7 +61,7 @@ export function startUI({ data, game, store }) {
   }
 
   // ---------- 音（ミキサー） ----------
-  setupMixer({ settings, store, sound });
+  const mixer = setupMixer({ settings, store, sound });
   // ブラウザは最初の操作までは音を出せないので、どこかを触った時点で BGM を始める
   const unlockAudio = () => {
     sound.unlock();
@@ -198,7 +200,7 @@ export function startUI({ data, game, store }) {
   function refresh() {
     refreshShop();
     refreshRate();
-    achBtn.textContent = '🏆 ' + game.achievementCount() + '/' + data.achievements.length;
+    achBtn.textContent = '🏆 実績 ' + game.achievementCount() + '/' + data.achievements.length;
   }
 
   // ---------- 買ったときの演出 ----------
@@ -348,12 +350,10 @@ export function startUI({ data, game, store }) {
       setTimeout(() => pig.classList.remove('press'), 110);
       sound.rest();
       restTaps += 1;
-      if (restTaps === 3 || restTaps % 12 === 0) {
+      // 帯と同じ見た目のお知らせは出さず、吹き出しと帯のボタンを光らせるだけにする
+      if (restTaps === 3 || restTaps % 10 === 0) {
         sayLine('いまは作戦タイム');
-        if (game.run.phase === 'break') {
-          toast('☀️ いまは作戦タイム', 'なでてもハートは出ないよ。準備ができたら次の夜へ！');
-          winterUI.nudge();
-        }
+        if (game.run.phase === 'break') { winterUI.nudge(); }
       }
       return;
     }
@@ -549,9 +549,9 @@ export function startUI({ data, game, store }) {
   }
   function closeAch() {
     achPanel.classList.remove('open');
-    achBtn.focus();
+    $('menuBtn').focus();
   }
-  achBtn.addEventListener('click', openAch);
+  // 🏆 は ☰ メニューから開く（menu.js）
   $('achClose').addEventListener('click', closeAch);
   achPanel.addEventListener('click', (ev) => { if (ev.target === achPanel) { closeAch(); } });
   document.addEventListener('keydown', (ev) => {
@@ -569,17 +569,36 @@ export function startUI({ data, game, store }) {
   const runUI = setupRunUI({
     data, game, fmt, sound, toast, save, pigSvg,
     onChange: () => { renderCount(); refresh(); checkAch(); },
-    onNewGame: startNewGame,
-    onGiveUp: () => {
-      const result = game.giveUp();
-      save();
-      if (result) { clearGolden(); runUI.showEnd(result); }
-      afterChange();
+    onNewGame: startNewGame
+  });
+
+  // ---------- ☰ メニュー ----------
+  setupMenu({
+    game, store, settings, fmt, version: pkg.version,
+    openHome: () => runUI.openHome(),
+    openAch,
+    openMixer: () => mixer.open(),
+    // この冬をやり直す：途中なら越えた夜の分の思い出をもらって、すぐ新しい冬へ
+    onRestart: () => {
+      winterUI.setPaused(false);
+      clearGolden();
+      goldenDue = null;
+      if (!game.isOver()) {
+        const result = game.giveUp();
+        if (result && result.memories > 0) { toast('🔄 やり直し', `越えた夜の分の思い出 💭+${result.memories}`); }
+      }
+      startNewGame();
+    },
+    // データをすべて消して、読み込み直す
+    onWipe: () => {
+      store.wipe();
+      location.reload();
     }
   });
 
   // 新しい冬：仲間・飾りを片付けて、ショップを最初の状態に
   function startNewGame() {
+    runUI.closeRunPanels();
     game.newGame();
     herd.innerHTML = '';
     decor.reset();
@@ -676,7 +695,8 @@ export function startUI({ data, game, store }) {
   // 夜のあいだだけ進む。⏸・パネルを開いている間・タブが裏のときは止まる
   // 実際に経った時間で進めるが、一度に進めるのは1秒まで（スリープ明けなどで一気に進まないように）
   let lastTick = Date.now();
-  const frozen = () => winterUI.isPaused() || runUI.anyOpen() || achPanel.classList.contains('open') || document.hidden;
+  // ⏸ のほか、メニューやパネルを開いている間も止める
+  const frozen = () => winterUI.isPaused() || !!document.querySelector('.overlay.open') || document.hidden;
   setInterval(() => {
     const t = Date.now();
     const ms = Math.min(Math.max(0, t - lastTick), 1000);
