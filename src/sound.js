@@ -1,12 +1,45 @@
-// sound.js — WebAudio で作る小さな鳴き声・効果音（音声ファイルは使わない）
+// sound.js — WebAudio で作る効果音と BGM（音声ファイルは使わない）
+// ブラウザは最初の操作（タップ・キー入力）までは音を出せないので、unlock() で鳴らし始める
 
-export function createSound(isOn) {
+// ---- BGM の譜面（96 BPM・8分音符単位・8小節ループ。数字は MIDI ノート番号、null は休み） ----
+const BPM = 96;
+const STEP = 60 / BPM / 2; // 8分音符の長さ（秒）
+const MELODY = [
+  76, 79, null, 79, 81, 79, 76, null,      // C
+  84, null, 81, null, 79, null, 76, null,  // Am
+  77, 81, null, 81, 84, 81, 77, null,      // F
+  79, null, 83, null, 86, null, null, null,// G
+  76, 79, 84, 79, 76, 79, 84, null,        // C
+  81, null, 79, null, 76, null, 72, null,  // Am
+  77, null, 81, null, 79, null, 76, null,  // F
+  74, null, 79, null, 72, null, null, null // G → C
+];
+const BASS = [48, 45, 41, 43, 48, 45, 41, 43];       // 小節ごとの根音
+const CHORDS = [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]];
+const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+export function createSound({ sfxOn, bgmOn }) {
   let ctx = null;
+  let sfxBus = null;
+  let bgmBus = null;
 
+  function ensure() {
+    if (ctx) { return ctx; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { return null; }
+    ctx = new AC();
+    sfxBus = ctx.createGain();
+    sfxBus.connect(ctx.destination);
+    bgmBus = ctx.createGain();
+    bgmBus.gain.value = 0;
+    bgmBus.connect(ctx.destination);
+    return ctx;
+  }
+
+  // ---- 効果音 ----
   function tone(freqs, dur, vol = 0.08) {
-    if (!isOn()) { return; }
+    if (!sfxOn() || !ensure()) { return; }
     try {
-      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
       const t = ctx.currentTime;
       freqs.forEach((f, i) => {
         const o = ctx.createOscillator();
@@ -19,16 +52,100 @@ export function createSound(isOn) {
         g.gain.setValueAtTime(0.0001, start);
         g.gain.exponentialRampToValueAtTime(vol, start + 0.015);
         g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-        o.connect(g).connect(ctx.destination);
+        o.connect(g).connect(sfxBus);
         o.start(start);
         o.stop(start + dur + 0.02);
       });
     } catch (e) { /* 音が出せない環境では何もしない */ }
   }
 
+  // ---- BGM ----
+  function pluck(midi, at, { type = 'sine', vol = 0.05, decay = 0.5, attack = 0.008 } = {}) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(midiHz(midi), at);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+    o.connect(g).connect(bgmBus);
+    o.start(at);
+    o.stop(at + decay + 0.05);
+  }
+
+  let step = 0;
+  let nextTime = 0;
+  let timer = null;
+
+  function scheduleStep(i, at) {
+    const mel = MELODY[i % MELODY.length];
+    if (mel != null) {
+      pluck(mel, at, { vol: 0.05, decay: 0.55 });
+      pluck(mel + 12, at, { vol: 0.012, decay: 0.3 }); // 1オクターブ上を薄く重ねてオルゴール風に
+    }
+    const bar = Math.floor(i / 8) % BASS.length;
+    const inBar = i % 8;
+    if (inBar === 0 || inBar === 4) {
+      pluck(BASS[bar], at, { type: 'triangle', vol: 0.07, decay: 0.7 });
+    }
+    if (inBar === 2 || inBar === 6) {
+      CHORDS[bar % CHORDS.length].forEach((n) => pluck(n, at, { vol: 0.012, decay: 0.35 }));
+    }
+  }
+
+  function scheduler() {
+    while (nextTime < ctx.currentTime + 0.25) {
+      scheduleStep(step, nextTime);
+      step += 1;
+      nextTime += STEP;
+    }
+  }
+
+  function startBgm() {
+    if (timer || !bgmOn() || !ensure()) { return; }
+    nextTime = ctx.currentTime + 0.1;
+    step = 0;
+    bgmBus.gain.cancelScheduledValues(ctx.currentTime);
+    bgmBus.gain.setValueAtTime(0, ctx.currentTime);
+    bgmBus.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 1.2);
+    scheduler();
+    timer = setInterval(scheduler, 100);
+  }
+
+  function stopBgm() {
+    if (!timer) { return; }
+    clearInterval(timer);
+    timer = null;
+    bgmBus.gain.cancelScheduledValues(ctx.currentTime);
+    bgmBus.gain.setValueAtTime(bgmBus.gain.value, ctx.currentTime);
+    bgmBus.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
+  }
+
+  // 設定が変わったら呼ぶ
+  function syncBgm() {
+    if (bgmOn()) { startBgm(); } else { stopBgm(); }
+  }
+
+  // 最初の操作で呼ぶ（ここで初めて音が出せるようになる）
+  function unlock() {
+    if (!ensure()) { return; }
+    if (ctx.state === 'suspended') { ctx.resume(); }
+    syncBgm();
+  }
+
+  // タブを裏に回したら止め、戻ったら再開する
+  document.addEventListener('visibilitychange', () => {
+    if (!ctx) { return; }
+    if (document.visibilityState === 'hidden') { ctx.suspend(); } else { ctx.resume(); }
+  });
+
   return {
+    unlock,
+    syncBgm,
     squeak: () => tone([950 + Math.random() * 300], 0.13),
     buy: () => tone([700, 1050], 0.1, 0.06),
-    golden: () => tone([800, 1000, 1250, 1600], 0.11, 0.07)
+    golden: () => tone([800, 1000, 1250, 1600], 0.11, 0.07),
+    land: () => tone([1200, 1500], 0.08, 0.05),
+    fanfare: () => tone([660, 830, 990, 1320], 0.14, 0.08)
   };
 }

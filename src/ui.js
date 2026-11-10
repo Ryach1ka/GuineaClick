@@ -3,6 +3,8 @@
 import { formatNumber } from './format.js';
 import { createSound } from './sound.js';
 import { createPig } from './pig.js';
+import { createDecor } from './decor.js';
+import { flyIcon, burst, confetti, floatLabel, centerOf } from './effects.js';
 
 export function startUI({ data, game, store }) {
   const $ = (id) => document.getElementById(id);
@@ -18,13 +20,15 @@ export function startUI({ data, game, store }) {
   const achPanel = $('achPanel');
   const achList = $('achList');
   const soundBtn = $('soundBtn');
+  const bgmBtn = $('bgmBtn');
+  const decor = createDecor($('decor'));
 
   const buttons = {};      // 品物id → ボタン
   let lockedBtn = null;    // 次に解放される品物の「？？？」ボタン
   let bubbleTimer = null;
   let wasFever = false;
   const settings = store.loadSettings();
-  const sound = createSound(() => settings.sound);
+  const sound = createSound({ sfxOn: () => settings.sound, bgmOn: () => settings.bgm });
   const pigSvg = $('pigSvg');
   const pigCtl = createPig(pigSvg);
 
@@ -45,8 +49,12 @@ export function startUI({ data, game, store }) {
   // ---------- 音のボタン ----------
   function renderSound() {
     soundBtn.textContent = settings.sound ? '🔊' : '🔇';
-    soundBtn.setAttribute('aria-label', settings.sound ? '音を消す' : '音を出す');
+    soundBtn.setAttribute('aria-label', settings.sound ? '効果音を消す' : '効果音を出す');
     soundBtn.setAttribute('aria-pressed', String(settings.sound));
+    bgmBtn.textContent = '🎵';
+    bgmBtn.classList.toggle('off', !settings.bgm);
+    bgmBtn.setAttribute('aria-label', settings.bgm ? 'BGMを止める' : 'BGMを流す');
+    bgmBtn.setAttribute('aria-pressed', String(settings.bgm));
   }
   soundBtn.addEventListener('click', () => {
     settings.sound = !settings.sound;
@@ -54,6 +62,20 @@ export function startUI({ data, game, store }) {
     renderSound();
     sound.squeak();
   });
+  bgmBtn.addEventListener('click', () => {
+    settings.bgm = !settings.bgm;
+    store.writeSettings(settings);
+    renderSound();
+    sound.syncBgm();
+  });
+  // ブラウザは最初の操作までは音を出せないので、どこかを触った時点で BGM を始める
+  const unlockAudio = () => {
+    sound.unlock();
+    window.removeEventListener('pointerdown', unlockAudio, true);
+    window.removeEventListener('keydown', unlockAudio, true);
+  };
+  window.addEventListener('pointerdown', unlockAudio, true);
+  window.addEventListener('keydown', unlockAudio, true);
 
   // ---------- ショップ ----------
   function buildShop() {
@@ -61,7 +83,10 @@ export function startUI({ data, game, store }) {
       const b = document.createElement('button');
       b.className = 'item';
       b.type = 'button';
-      b.innerHTML = '<span class="nm"></span><span class="ds"></span><span class="pr"></span>';
+      b.innerHTML = '<span class="ic"><span class="em"></span><span class="cnt"></span></span><span class="nm"></span><span class="ds"></span><span class="pr"></span>';
+      b.querySelector('.em').textContent = it.icon;
+      b.querySelector('.nm').textContent = it.name;
+      b.querySelector('.ds').textContent = it.desc;
       b.addEventListener('click', () => onBuy(it, b));
       buttons[it.id] = b;
       shop.appendChild(b);
@@ -70,7 +95,7 @@ export function startUI({ data, game, store }) {
     lockedBtn.className = 'item locked';
     lockedBtn.type = 'button';
     lockedBtn.disabled = true;
-    lockedBtn.innerHTML = '<span class="nm">？？？</span><span class="ds">もっとハートをあつめよう</span><span class="pr"></span>';
+    lockedBtn.innerHTML = '<span class="ic"><span class="em">？</span></span><span class="nm">？？？</span><span class="ds">もっとハートをあつめよう</span><span class="pr"></span>';
     shop.appendChild(lockedBtn);
   }
 
@@ -85,10 +110,13 @@ export function startUI({ data, game, store }) {
         return;
       }
       const c = game.cost(it);
-      b.querySelector('.nm').textContent = it.name + ' ×' + game.ownedOf(it.id);
-      b.querySelector('.ds').textContent = it.desc;
+      const n = game.ownedOf(it.id);
+      const cnt = b.querySelector('.cnt');
+      cnt.textContent = n > 0 ? fmt(n) : '';
+      cnt.hidden = n === 0;
       b.querySelector('.pr').textContent = '♥ ' + fmt(c);
       b.disabled = game.state.count < c;
+      b.setAttribute('aria-label', `${it.name}（${n}こ持っている）${it.desc}、ハート${fmt(c)}`);
     });
     lockedBtn.hidden = !nextLocked;
     if (nextLocked) {
@@ -116,14 +144,70 @@ export function startUI({ data, game, store }) {
     achBtn.textContent = '🏆 ' + game.achievementCount() + '/' + data.achievements.length;
   }
 
+  // ---------- 買ったときの演出 ----------
+  function sayLine(text) {
+    bubble.textContent = text;
+    bubble.classList.add('show');
+    clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 1300);
+  }
+
   function onBuy(it, b) {
+    const price = game.cost(it);
     if (!game.buy(it)) { return; }
+    const owned = game.ownedOf(it.id);
     renderCount();
     save();
+
+    // ボタン：ぽんと弾んで、所持数バッジもぴょこっと
     bump(b, 'bought');
+    bump(b.querySelector('.cnt'), 'pop');
     sound.buy();
-    if (it.herd) { syncHerd(true); }
+    burst(centerOf(b.querySelector('.ic')), { count: 8, spread: 40 });
+
+    // 数字：使ったハートと、増えた力をふわっと出す
+    // 使ったハートは大きい数字の右肩、増えた力は「毎秒/タップ」の下に出す
+    floatLabel('−♥' + fmt(price), centerOf(el, 1.05, 0.1), 'minus');
+    const gainText = it.click ? 'タップ +' + fmt(it.click) : '毎秒 +' + fmt(it.perSec);
+    floatLabel(gainText, centerOf(rateEl, 0.5, 1.6), 'plus');
+
+    // アイコンが本体（仲間・飾りはその場所）へ飛んでいって、モルモットが反応する
+    const from = centerOf(b.querySelector('.ic'));
+    const head = centerOf(pigSvg, 0.2, 0.5);
+    flyIcon(it.icon, from, head).then(() => {
+      reactTo(it, owned);
+    });
+
     afterChange();
+  }
+
+  function reactTo(it, owned) {
+    const head = centerOf(pigSvg, 0.2, 0.5);
+    const line = it.lines[Math.floor(Math.random() * it.lines.length)];
+    sound.land();
+    if (it.react === 'chew') {
+      pigCtl.chew();
+      burst(head, { count: 10 });
+    } else if (it.react === 'friend') {
+      const added = syncHerd(true);
+      pigCtl.popcorn();
+      added.forEach((m) => burst(centerOf(m), { count: 10, spread: 50 }));
+    } else if (it.react === 'pet') {
+      pigCtl.pet(2200);
+      burst(centerOf(pigSvg, 0.5, 0.45), { count: 16, chars: ['✦', '✧', '✨'], spread: 110 });
+    } else if (it.react === 'decor') {
+      const added = decor.sync(game.ownedOf, true);
+      pigCtl.popcorn();
+      (added.length ? added : [pigSvg]).forEach((d) => burst(centerOf(d), { count: 14, spread: 70 }));
+    }
+    sayLine(line);
+
+    // キリのいい数になったらお祝い
+    if (data.milestones.includes(owned)) {
+      sound.fanfare();
+      confetti(stage.getBoundingClientRect(), { count: 48 });
+      toast('🎉 ' + it.icon + ' ' + it.name + 'が ' + owned + 'こに！', 'すごい！そのちょうし！');
+    }
   }
 
   // ---------- モルモット本体 ----------
@@ -196,24 +280,50 @@ export function startUI({ data, game, store }) {
       '</svg>';
   }
 
+  // 仲間の置き場所。本体の真後ろに隠れないよう、
+  //   ・2匹に1匹は「手前の列」（本体より前に描く）
+  //   ・残りは「左右の奥」（本体の横の空いているところ）
+  // にだけ置く
+  function friendSpot(i) {
+    if (i % 2 === 0) {
+      const k = i / 2;
+      return {
+        bottom: 1 + (k % 3) * 2.5 + Math.random() * 1.5,
+        left: 6 + ((k * 37) % 76) + Math.random() * 4,
+        z: 3
+      };
+    }
+    const k = (i - 1) / 2;
+    const leftSide = k % 2 === 0;
+    return {
+      bottom: 10 + (Math.floor(k / 2) % 3) * 5 + Math.random() * 2,
+      left: leftSide ? 1 + Math.random() * 10 : 78 + Math.random() * 8,
+      z: 1
+    };
+  }
+
   function addFriend(arrive) {
     const i = herd.children.length;
     const m = document.createElement('div');
     m.className = 'mini' + (arrive ? ' arrive' : '');
-    const bottom = 2 + Math.random() * 22;   // ステージ下からの位置（%）
-    m.style.bottom = bottom + '%';
-    m.style.left = (4 + Math.random() * 80) + '%';
-    m.style.zIndex = bottom < 9 ? 3 : 1;     // 手前の子は本体より前に
+    const spot = friendSpot(i);
+    m.style.bottom = spot.bottom + '%';
+    m.style.left = spot.left + '%';
+    m.style.zIndex = spot.z;
     m.style.setProperty('--d', (7 + Math.random() * 7).toFixed(1) + 's');
     m.style.setProperty('--dl', (-Math.random() * 10).toFixed(1) + 's');
-    m.style.setProperty('--s', (0.8 + (24 - bottom) / 60).toFixed(2));
+    m.style.setProperty('--s', (0.85 + (24 - spot.bottom) / 70).toFixed(2));
     m.innerHTML = miniPigSVG(data.coats[i % data.coats.length]);
     herd.appendChild(m);
+    return m;
   }
 
+  // 所持数まで仲間を増やす。新しく来た子の配列を返す
   function syncHerd(arrive) {
     const want = Math.min(game.ownedOf('friend'), data.maxHerd);
-    while (herd.children.length < want) { addFriend(arrive); }
+    const added = [];
+    while (herd.children.length < want) { added.push(addFriend(arrive)); }
+    return added;
   }
 
   function hopRandomFriend() {
@@ -335,6 +445,7 @@ export function startUI({ data, game, store }) {
   renderSound();
   renderCount();
   syncHerd(false);
+  decor.sync(game.ownedOf, false);
   checkAch();
   refresh();
   // 体の上をドラッグしてもなでたことになる（60px 動かすごとに1回）

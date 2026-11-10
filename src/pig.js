@@ -65,9 +65,9 @@ export function createPig(svg, {
   }
 
   // なでられた。寝ていたら起きる（起きたら true を返す）
-  function pet() {
+  function pet(ms = 1200) {
     const woke = mode === 'sleeping';
-    setMode(woke ? 'idle' : 'petting', woke ? 0 : 1200);
+    setMode(woke ? 'idle' : 'petting', woke ? 0 : ms);
     poke();
     return woke;
   }

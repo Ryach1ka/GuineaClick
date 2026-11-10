@@ -14,16 +14,21 @@ export const data = {
   //   click:  1個あたりのなでる力の増加量
   //   perSec: 1個あたりの毎秒の増加量
   //   herd:   true なら持っている数だけステージに仲間が出てくる
+  //   react:  買ったときのモルモットの反応（chew: もぐもぐ / friend: 仲間が来て大よろこび / pet: うっとり / decor: ステージに飾りが増える）
+  //   lines:  買ったときのセリフ（ランダムで1つ）
   items: [
-    { id: 'hay',     name: '🌾 牧草',         desc: 'なでる力 +1',  base: 15,     click: 1 },
-    { id: 'carrot',  name: '🥕 にんじん',     desc: '毎秒 +1',      base: 30,     perSec: 1 },
-    { id: 'friend',  name: '🐹 なかま',       desc: '毎秒 +6',      base: 150,    perSec: 6, herd: true },
-    { id: 'cabbage', name: '🥬 キャベツ',     desc: 'なでる力 +8',  base: 600,    click: 8 },
-    { id: 'house',   name: '🏠 おうち',       desc: '毎秒 +40',     base: 2000,   perSec: 40 },
-    { id: 'brush',   name: '✨ ブラッシング', desc: 'なでる力 +50', base: 9000,   click: 50 },
-    { id: 'garden',  name: '🌳 ひろいお庭',   desc: '毎秒 +260',    base: 30000,  perSec: 260 },
-    { id: 'village', name: '🏡 モルモット村', desc: '毎秒 +1600',   base: 250000, perSec: 1600 }
+    { id: 'hay',     icon: '🌾', name: '牧草',         desc: 'なでる力 +1',  base: 15,     click: 1,     react: 'chew',   lines: ['もぐもぐ…', 'わらうまい！'] },
+    { id: 'carrot',  icon: '🥕', name: 'にんじん',     desc: '毎秒 +1',      base: 30,     perSec: 1,    react: 'chew',   lines: ['ポリポリ♪', 'にんじん！'] },
+    { id: 'friend',  icon: '🐹', name: 'なかま',       desc: '毎秒 +6',      base: 150,    perSec: 6,    react: 'friend', lines: ['プイプイ！', 'ともだち！'], herd: true },
+    { id: 'cabbage', icon: '🥬', name: 'キャベツ',     desc: 'なでる力 +8',  base: 600,    click: 8,     react: 'chew',   lines: ['シャキシャキ！', 'ごちそう〜'] },
+    { id: 'house',   icon: '🏠', name: 'おうち',       desc: '毎秒 +40',     base: 2000,   perSec: 40,   react: 'decor',  lines: ['おうちだ〜！', 'ひみつきち！'] },
+    { id: 'brush',   icon: '✨', name: 'ブラッシング', desc: 'なでる力 +50', base: 9000,   click: 50,    react: 'pet',    lines: ['ルルル…', 'つやつや〜'] },
+    { id: 'garden',  icon: '🌳', name: 'ひろいお庭',   desc: '毎秒 +260',    base: 30000,  perSec: 260,  react: 'decor',  lines: ['おさんぽ！', 'お花いっぱい'] },
+    { id: 'village', icon: '🏡', name: 'モルモット村', desc: '毎秒 +1600',   base: 250000, perSec: 1600, react: 'decor',  lines: ['村ができた！', 'プイプイプイ！'] }
   ],
+
+  // 所持数がこの数に届いたら、お祝い演出
+  milestones: [10, 25, 50, 100, 200],
 
   // これまでに稼いだハートが「値段 × この割合」に届いたら品物が見えるようになる
   unlockRatio: 0.5,

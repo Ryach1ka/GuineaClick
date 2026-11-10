@@ -39,7 +39,8 @@ export function createStore(storage = defaultStorage()) {
 
   function loadSettings() {
     const s = readJSON(KEY_SETTINGS) || {};
-    return { sound: s.sound === true };
+    // sound: 効果音（最初はオフ）、bgm: BGM（最初はオン）
+    return { sound: s.sound === true, bgm: s.bgm !== false };
   }
 
   function writeSettings(settings) {

@@ -48,11 +48,16 @@ describe('セーブ', () => {
     expect(s.load()).toEqual({ count: 0, owned: {}, stats: null });
   });
 
-  it('音の設定は最初オフ', () => {
+  it('効果音は最初オフ、BGM は最初オン', () => {
     const s = createStore(memoryStorage());
-    expect(s.loadSettings()).toEqual({ sound: false });
-    s.writeSettings({ sound: true });
-    expect(s.loadSettings()).toEqual({ sound: true });
+    expect(s.loadSettings()).toEqual({ sound: false, bgm: true });
+    s.writeSettings({ sound: true, bgm: false });
+    expect(s.loadSettings()).toEqual({ sound: true, bgm: false });
+  });
+
+  it('BGM 設定がない古いセーブでも BGM はオン', () => {
+    const s = createStore(memoryStorage({ 'morumotto:settings': '{"sound":true}' }));
+    expect(s.loadSettings()).toEqual({ sound: true, bgm: true });
   });
 });
 
