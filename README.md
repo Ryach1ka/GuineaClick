@@ -44,3 +44,7 @@ tests/            Vitest のテスト
 guinea.ui.spawnGolden()     // きんのにんじんをすぐ出す
 guinea.game.state.count = 1e6  // ハートを増やす
 ```
+
+## ライセンス
+
+[MIT License](LICENSE)。文字のフォント「Zen Maru Gothic」は Google Fonts から読み込んでいます（SIL Open Font License）。
