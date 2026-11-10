@@ -5,77 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>モルモットをなでなで</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap">
-<style>
-:root{
-  --bg:#e9f3d8; --ground:#cfe3a6; --ink:#4a3a2a; --muted:#7a6a55;
-  --heart:#e8567a; --bubble:#fffaf0;
-  box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px);
-  padding-bottom:env(safe-area-inset-bottom,0px);
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#1f2a1a; --ground:#2d3d26; --ink:#f3ead8; --muted:#b9ad95; --heart:#ff7a9a; --bubble:#3a3326;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#1f2a1a; --ground:#2d3d26; --ink:#f3ead8; --muted:#b9ad95; --heart:#ff7a9a; --bubble:#3a3326;
-}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{
-  background:var(--bg); color:var(--ink);
-  font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
-  display:flex; flex-direction:column; align-items:center;
-  user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
-  overflow:hidden; position:relative;
-}
-.score{margin-top:6vh; text-align:center}
-.score .n{font-size:clamp(3rem,16vw,5.5rem); font-weight:700; line-height:1; color:var(--heart); font-variant-numeric:tabular-nums}
-.score .l{font-size:1rem; color:var(--muted); margin-top:.3rem}
-.stage{flex:1; width:100%; max-width:520px; position:relative; display:flex; align-items:flex-end; justify-content:center}
-.ground{position:absolute; left:0; right:0; bottom:0; height:34%; background:var(--ground); border-radius:50% 50% 0 0 / 28% 28% 0 0}
-#pig{position:relative; width:min(70vw,300px,36vh); margin-bottom:12%; cursor:pointer; touch-action:manipulation; transition:transform .12s ease-out; background:none; border:0; padding:0}
-#pig:focus-visible{outline:3px solid var(--heart); outline-offset:6px; border-radius:24px}
-#pig.press{transform:scale(.93,1.06)}
-#pig svg{width:100%; height:auto; display:block}
-.bubble{
-  position:absolute; top:-6%; right:-4%; background:var(--bubble); color:var(--ink);
-  padding:.35rem .8rem; border-radius:16px; font-weight:700; opacity:0; transform:translateY(6px);
-  transition:opacity .15s, transform .15s; pointer-events:none; white-space:nowrap;
-}
-.bubble.show{opacity:1; transform:none}
-.hint{position:absolute; bottom:calc(2vh + env(safe-area-inset-bottom,0px)); color:var(--muted); font-size:.9rem; left:0; right:0; text-align:center}
-.fly{position:absolute; pointer-events:none; font-size:1.8rem; color:var(--heart); animation:up 1s ease-out forwards; z-index:5}
-@keyframes up{from{opacity:1; transform:translateY(0) scale(.8)} to{opacity:0; transform:translateY(-130px) scale(1.3)}}
-.shop{width:100%;max-width:520px;display:grid;gap:.45rem;padding:.7rem .8rem .8rem;background:var(--ground)}
-.item{display:grid;grid-template-columns:1fr auto;grid-template-areas:"nm pr" "ds pr";align-items:center;column-gap:.8rem;text-align:left;font:inherit;color:var(--ink);background:var(--bubble);border:0;border-radius:14px;padding:.55rem .9rem;cursor:pointer;touch-action:manipulation}
-.item .nm{grid-area:nm;font-weight:700}
-.item .ds{grid-area:ds;font-size:.82rem;color:var(--muted)}
-.item .pr{grid-area:pr;font-weight:700;color:var(--heart);font-variant-numeric:tabular-nums}
-.item:disabled{opacity:.5;cursor:default}
-.item:focus-visible{outline:3px solid var(--heart);outline-offset:2px}
-#rate{font-size:.85rem}
-.eye{transform-box:fill-box;transform-origin:center;animation:blink 4.5s infinite}
-@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
-#pig svg{transform-origin:50% 100%;animation:breathe 3.4s ease-in-out infinite}
-@keyframes breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.028)}}
-.ear{transform-box:fill-box;transform-origin:50% 100%}
-.ear.wig{animation:wig .4s ease-in-out}
-@keyframes wig{0%,100%{transform:rotate(0)}30%{transform:rotate(-6deg)}65%{transform:rotate(5deg)}}
-@media (prefers-reduced-motion: reduce){.eye,#pig svg,.ear.wig{animation:none}}
-@media (prefers-reduced-motion: reduce){
-  .fly{animation-duration:.01s} #pig{transition:none}
-}
-</style>
 </head>
 <body>
+<div class="topbar">
+  <button id="soundBtn" type="button">🔇</button>
+  <button id="achBtn" type="button">🏆 0/0</button>
+</div>
 <div class="score">
   <div class="n" id="count">0</div>
   <div class="l">ハート <span id="rate"></span></div>
 </div>
 <div class="stage">
   <div class="ground"></div>
+  <div id="herd"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
   <button id="pig" aria-label="モルモットをなでる">
     <span class="bubble" id="bubble">プイプイ</span>
     <svg viewBox="0 0 340 240" role="img" aria-hidden="true">
@@ -97,9 +40,10 @@ body{
         <circle cx="58" cy="118" r="6.5" fill="#2b1d12"/>
         <circle cx="56" cy="115.5" r="2" fill="#fff"/>
       </g>
+      <path class="happy" d="M50 120 Q58 110 66 120" stroke="#2b1d12" stroke-width="3.5" fill="none" stroke-linecap="round"/>
       <ellipse cx="30" cy="136" rx="9" ry="7" fill="#e58a9a"/>
       <path d="M30 143 Q38 152 48 146" stroke="#2b1d12" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <ellipse cx="74" cy="142" rx="9" ry="6" fill="#f2a07b" opacity=".6"/>
+      <ellipse class="cheek" cx="74" cy="142" rx="9" ry="6" fill="#f2a07b" opacity=".6"/>
       <!-- feet -->
       <ellipse cx="96" cy="216" rx="20" ry="10" fill="#f2a07b"/>
       <ellipse cx="240" cy="216" rx="22" ry="10" fill="#f2a07b"/>
@@ -108,9 +52,13 @@ body{
 </div>
 <div class="shop" id="shop"></div>
 
-<script src="data.js"></script>
-<script src="save.js"></script>
-<script src="game.js"></script>
-<script src="ui.js"></script>
+<div class="overlay" id="achPanel" role="dialog" aria-modal="true" aria-labelledby="achTitle">
+  <div class="card">
+    <h2><span id="achTitle">🏆 実績</span><button id="achClose" type="button" aria-label="閉じる">✕</button></h2>
+    <ul id="achList"></ul>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>
