@@ -2,6 +2,7 @@
 
 import { formatNumber } from './format.js';
 import { createSound } from './sound.js';
+import { createPig } from './pig.js';
 
 export function startUI({ data, game, store }) {
   const $ = (id) => document.getElementById(id);
@@ -24,6 +25,8 @@ export function startUI({ data, game, store }) {
   let wasFever = false;
   const settings = store.loadSettings();
   const sound = createSound(() => settings.sound);
+  const pigSvg = $('pigSvg');
+  const pigCtl = createPig(pigSvg);
 
   const fmt = (n) => formatNumber(n, data.units);
   const save = () => store.write(game);
@@ -101,6 +104,7 @@ export function startUI({ data, game, store }) {
     rateEl.textContent = txt;
     if (fever !== wasFever) {
       document.body.classList.toggle('fever', fever);
+      pigCtl.setFever(fever);
       wasFever = fever;
       refreshShop();
     }
@@ -123,17 +127,19 @@ export function startUI({ data, game, store }) {
   }
 
   // ---------- モルモット本体 ----------
+  // なでたときの反応。寝ていたら起きる
   function animatePig() {
     pig.classList.add('press');
-    bump(pig.querySelector('.ear'), 'wig');
-    const svg = pig.querySelector('svg');
-    if (svg.animate) {
-      svg.animate(
-        [{ transform: 'translateY(0)' }, { transform: 'translateY(-12px)' }, { transform: 'translateY(0)' }],
-        { duration: 240, easing: 'ease-out' }
-      );
+    bump(pigSvg.querySelector('.ear'), 'wig');
+    const woke = pigCtl.pet();
+    if (woke) {
+      bubble.textContent = 'はっ！';
+      bubble.classList.add('show');
+      clearTimeout(bubbleTimer);
+      bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 900);
     }
     setTimeout(() => pig.classList.remove('press'), 110);
+    return woke;
   }
 
   function flyText(x, y, text, extra) {
@@ -158,29 +164,35 @@ export function startUI({ data, game, store }) {
     const gain = game.pet();
     renderCount();
     save();
-    animatePig();
+    const woke = animatePig();
     const rect = stage.getBoundingClientRect();
     const x = (ev.clientX || rect.left + rect.width / 2) - rect.left;
     const y = (ev.clientY || rect.top + rect.height / 2) - rect.top;
     flyText(x, y, '♥+' + fmt(gain), game.buffLeft() > 0 ? 'gold' : '');
-    if (game.shouldSpeak()) { speak(); }
+    // 起きた直後は「はっ！」を優先して、ふだんのセリフは出さない
+    if (!woke && game.shouldSpeak()) { speak(); }
     sound.squeak();
     hopRandomFriend();
     afterChange();
   }
 
   // ---------- ステージの仲間 ----------
-  function miniPigSVG([body, white, ear]) {
-    return '<svg viewBox="0 0 120 80" aria-hidden="true">' +
-      '<ellipse cx="62" cy="74" rx="44" ry="4" fill="#000" opacity=".12"/>' +
-      `<ellipse cx="66" cy="48" rx="50" ry="27" fill="${body}"/>` +
-      `<ellipse cx="78" cy="54" rx="28" ry="17" fill="${white}"/>` +
-      `<ellipse cx="32" cy="42" rx="22" ry="20" fill="${body}"/>` +
-      `<ellipse cx="40" cy="25" rx="8" ry="5.5" fill="${ear}" transform="rotate(-25 40 25)"/>` +
-      '<circle cx="24" cy="38" r="3" fill="#2b1d12"/>' +
-      '<ellipse cx="12" cy="46" rx="4" ry="3" fill="#e58a9a"/>' +
-      '<ellipse cx="36" cy="72" rx="7" ry="3.5" fill="#f2a07b"/>' +
-      '<ellipse cx="92" cy="72" rx="8" ry="3.5" fill="#f2a07b"/>' +
+  // 本体と同じ形を小さく描く（形やグラデーションは index.html の #pigSvg の defs を使い回す）
+  function miniPigSVG(coat) {
+    return '<svg viewBox="0 60 340 180" aria-hidden="true">' +
+      '<ellipse cx="176" cy="229" rx="132" ry="10" fill="url(#pigGroundShade)"/>' +
+      '<ellipse cx="96" cy="226" rx="11" ry="5" fill="#f0b29a"/>' +
+      '<ellipse cx="252" cy="227" rx="12" ry="5" fill="#f0b29a"/>' +
+      `<use href="#pigBodyPath" fill="${coat.fur}"/>` +
+      '<g clip-path="url(#pigBodyClip)">' +
+        (coat.patch ? '<use href="#pigPatch"/>' : '') +
+        '<use href="#pigBodyPath" fill="url(#pigShadeOver)"/>' +
+      '</g>' +
+      `<use href="#pigEarPath" fill="${coat.ear}"/>` +
+      '<ellipse cx="82" cy="124" rx="13" ry="14" fill="#1c110a"/>' +
+      '<circle cx="77" cy="118" r="4.5" fill="#fff"/>' +
+      '<ellipse cx="66" cy="152" rx="12" ry="7" fill="#f2918a" opacity=".4"/>' +
+      '<path d="M35 138 C37 134 44 134 46 138 C44 141.5 37 141.5 35 138 Z" fill="#8a5a4c"/>' +
       '</svg>';
   }
 
@@ -325,7 +337,29 @@ export function startUI({ data, game, store }) {
   syncHerd(false);
   checkAch();
   refresh();
-  pig.addEventListener('click', onPet);
+  // 体の上をドラッグしてもなでたことになる（60px 動かすごとに1回）
+  let drag = null;
+  pig.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, dist: 0, moved: false }; });
+  pig.addEventListener('pointermove', (e) => {
+    if (!drag) { return; }
+    drag.dist += Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (drag.dist >= 60) {
+      drag.dist = 0;
+      drag.moved = true;
+      onPet(e);
+    }
+  });
+  // click は pointerup のあとに来るので、少し遅らせて片付ける
+  const endDrag = () => setTimeout(() => { drag = null; }, 0);
+  pig.addEventListener('pointerup', endDrag);
+  pig.addEventListener('pointercancel', endDrag);
+  pig.addEventListener('pointerleave', endDrag);
+  pig.addEventListener('click', (e) => {
+    if (drag && drag.moved) { return; } // ドラッグで撫でた直後のクリックは数えない
+    onPet(e);
+  });
   scheduleGolden();
 
   setInterval(() => {

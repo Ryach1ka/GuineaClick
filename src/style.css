@@ -41,7 +41,7 @@ body.fever .score .n{color:var(--gold)}
 .stage{flex:1; min-height:200px; width:100%; max-width:520px; position:relative; display:flex; align-items:flex-end; justify-content:center}
 .ground{position:absolute; left:0; right:0; bottom:0; height:34%; background:var(--ground); border-radius:50% 50% 0 0 / 28% 28% 0 0}
 #herd{position:absolute; inset:0; pointer-events:none}
-#pig{position:relative; z-index:2; width:min(70vw,300px,34vh); margin-bottom:12%; cursor:pointer; touch-action:manipulation; transition:transform .12s ease-out; background:none; border:0; padding:0}
+#pig{position:relative; z-index:2; width:min(70vw,300px,34vh); margin-bottom:6%; cursor:pointer; touch-action:none; transition:transform .12s ease-out; background:none; border:0; padding:0}
 #pig:focus-visible{outline:3px solid var(--heart); outline-offset:6px; border-radius:24px}
 #pig.press{transform:scale(.93,1.06)}
 #pig svg{width:100%; height:auto; display:block}
@@ -70,22 +70,63 @@ body.fever .score .n{color:var(--gold)}
 #rate{font-size:.85rem}
 
 /* モルモット本体のしぐさ */
-.eye{transform-box:fill-box; transform-origin:center; animation:blink 4.5s infinite}
-@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
-.happy{display:none}
-body.fever #pig .eye{display:none}
-body.fever #pig .happy{display:inline}
-.cheek{transition:opacity .3s}
-body.fever #pig .cheek{opacity:1}
-#pig svg{transform-origin:50% 100%; animation:breathe 3.4s ease-in-out infinite}
-@keyframes breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.028)}}
-body.fever #pig svg{animation-duration:1.2s}
-.ear{transform-box:fill-box; transform-origin:50% 100%}
-.ear.wig{animation:wig .4s ease-in-out}
-@keyframes wig{0%,100%{transform:rotate(0)}30%{transform:rotate(-6deg)}65%{transform:rotate(5deg)}}
+#pigSvg{
+  --fur:#d98c4a; --fur-light:#f2b57c; --fur-dark:#a5602b; --ear:#b97549;
+  transform-origin:50% 92%; overflow:visible;
+}
+#pigSvg .breathe{transform-origin:175px 216px; animation:breathe 3.2s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.012,1.03)}}
+body.fever #pigSvg .breathe{animation-duration:1.2s}
+#pigSvg .nose{animation:sniff 1.9s infinite}
+@keyframes sniff{
+  0%,34%,100%{transform:translate(0,0)}
+  4%,12%,20%{transform:translate(-.9px,-1.1px)}
+  8%,16%,24%{transform:translate(0,0)}
+}
+#pigSvg .ear{transform-box:fill-box; transform-origin:15% 85%; animation:earflick 7s infinite}
+@keyframes earflick{0%,86%,100%{transform:rotate(0)} 88%{transform:rotate(-12deg)} 91%{transform:rotate(5deg)} 94%{transform:rotate(0)}}
+#pigSvg .ear.wig{animation:wig .4s ease-in-out}
+@keyframes wig{0%,100%{transform:rotate(0)} 30%{transform:rotate(-10deg)} 65%{transform:rotate(6deg)}}
+#pigSvg .eye-open{transform-box:fill-box; transform-origin:center; animation:blink 5.5s infinite}
+@keyframes blink{0%,93%,100%{transform:scaleY(1)} 96%{transform:scaleY(.08)}}
+#pigSvg .eye-closed, #pigSvg .eye-happy, #pigSvg .hay, #pigSvg .zzz{display:none}
+#pigSvg .blush{transition:opacity .3s}
+#pigSvg .jaw{transform-box:fill-box; transform-origin:50% 0}
+#pigSvg .squash{transform-origin:175px 216px; transition:transform .8s ease}
+
+/* もぐもぐ */
+#pigSvg.chewing .jaw{animation:chew .17s ease-in-out infinite alternate}
+#pigSvg.chewing .nose{animation-duration:.6s}
+#pigSvg.chewing .hay{display:inline; stroke-dasharray:46 46; animation:eat 3.2s linear forwards}
+@keyframes chew{to{transform:translateY(2.2px) scaleY(1.15)}}
+@keyframes eat{from{stroke-dashoffset:0} to{stroke-dashoffset:46}}
+
+/* なでられてうっとり（ルルル…） */
+#pigSvg.petting .eye-open{display:none}
+#pigSvg.petting .eye-closed{display:inline}
+#pigSvg.petting .blush{opacity:.75}
+#pigSvg.petting .purr{animation:purr .07s linear infinite alternate}
+@keyframes purr{to{transform:translate(.6px,.3px)}}
+
+/* 香箱座りでうとうと */
+#pigSvg.sleeping .eye-open{display:none}
+#pigSvg.sleeping .eye-closed{display:inline}
+#pigSvg.sleeping .breathe{animation-duration:5s}
+#pigSvg.sleeping .squash{transform:translateY(5px) scale(1.04,.93)}
+#pigSvg.sleeping .nose{animation:none}
+#pigSvg.sleeping .ear{animation:none; transform:rotate(6deg)}
+#pigSvg.sleeping .zzz{display:inline}
+#pigSvg .zzz text{font:700 18px "Zen Maru Gothic",sans-serif; fill:var(--muted); animation:zz 2.4s ease-in-out infinite}
+#pigSvg .zzz text:nth-child(2){animation-delay:.8s; font-size:13px}
+@keyframes zz{0%{opacity:0; transform:translate(0,0)} 30%{opacity:1} 100%{opacity:0; transform:translate(-14px,-26px)}}
+
+/* ごきげんタイム：にっこり目でほっぺが赤い（ほかの表情より優先） */
+body.fever #pigSvg .eye-open, body.fever #pigSvg .eye-closed{display:none}
+body.fever #pigSvg .eye-happy{display:inline}
+body.fever #pigSvg .blush{opacity:.8}
 
 /* ステージの仲間 */
-.mini{position:absolute; width:58px; animation:wander var(--d) ease-in-out infinite; animation-delay:var(--dl)}
+.mini{position:absolute; width:64px; animation:wander var(--d) ease-in-out infinite; animation-delay:var(--dl)}
 .mini svg{display:block; width:100%; height:auto; transform:scale(var(--s))}
 .mini.arrive svg{animation:drop .5s ease-out}
 @keyframes wander{
@@ -125,6 +166,6 @@ body.fever #pig svg{animation-duration:1.2s}
 .ach.locked{opacity:.6}
 
 @media (prefers-reduced-motion: reduce){
-  .eye,#pig svg,.ear.wig,.mini,.mini svg,.golden,.toast,.item.bought,.score .n.bump{animation:none}
+  #pigSvg *,.mini,.mini svg,.golden,.toast,.item.bought,.score .n.bump{animation:none !important}
   .fly{animation-duration:.01s} #pig{transition:none}
 }

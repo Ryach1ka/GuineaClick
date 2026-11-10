@@ -65,13 +65,13 @@ export const data = {
   // 大きい数の単位（大きい順）
   units: [[1e16, '京'], [1e12, '兆'], [1e8, '億'], [1e4, '万']],
 
-  // ステージの仲間の毛色 [体, 白い模様, 耳]
+  // ステージの仲間の毛色（patch: ダッチ柄の白い帯があるか）
   coats: [
-    ['#d98c4a', '#fff4e2', '#c17636'],
-    ['#8a5a3a', '#f3e6d4', '#6e4429'],
-    ['#f0d9b5', '#ffffff', '#d9b98a'],
-    ['#3b3330', '#fff4e2', '#2a2422'],
-    ['#c9c4bd', '#ffffff', '#a39d95']
+    { name: 'オレンジ×白', fur: '#d98c4a', ear: '#b97549', patch: true },
+    { name: 'チョコ×白',   fur: '#76472d', ear: '#5c3624', patch: true },
+    { name: 'クリーム',     fur: '#ead1a6', ear: '#d6a888', patch: false },
+    { name: '黒×白',       fur: '#3a302c', ear: '#2b2320', patch: true },
+    { name: 'グレー',       fur: '#9c948d', ear: '#7e756f', patch: false }
   ],
 
   // 自動生産の更新間隔（ミリ秒）と自動セーブの間隔（ミリ秒）

@@ -21,32 +21,105 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <button id="pig" aria-label="モルモットをなでる">
     <span class="bubble" id="bubble">プイプイ</span>
-    <svg viewBox="0 0 340 240" role="img" aria-hidden="true">
-      <ellipse cx="170" cy="226" rx="120" ry="9" fill="#000" opacity=".12"/>
-      <!-- body -->
-      <ellipse cx="170" cy="150" rx="140" ry="78" fill="#d98c4a"/>
-      <ellipse cx="205" cy="165" rx="80" ry="50" fill="#fff4e2"/>
-      <ellipse cx="108" cy="120" rx="46" ry="36" fill="#fff4e2"/>
-      <!-- head -->
-      <ellipse cx="82" cy="128" rx="58" ry="52" fill="#d98c4a"/>
-      <path d="M40 112 Q74 100 62 150 Q40 150 32 134 Z" fill="#fff4e2"/>
-      <!-- ears -->
-      <g class="ear">
-        <ellipse cx="110" cy="84" rx="20" ry="14" fill="#c17636" transform="rotate(-25 110 84)"/>
-        <ellipse cx="62" cy="84" rx="18" ry="12" fill="#c17636" transform="rotate(20 62 84)"/>
+    <svg id="pigSvg" viewBox="0 0 340 260" aria-hidden="true">
+      <defs>
+        <radialGradient id="pigFurG" cx="38%" cy="28%" r="78%">
+          <stop offset="0" style="stop-color:var(--fur-light)"/>
+          <stop offset=".55" style="stop-color:var(--fur)"/>
+          <stop offset="1" style="stop-color:var(--fur-dark)"/>
+        </radialGradient>
+        <!-- 色に関係なく丸みを出す重ね塗り（仲間のモルモットでも使う） -->
+        <radialGradient id="pigShadeOver" cx="38%" cy="26%" r="80%">
+          <stop offset="0" stop-color="#fff" stop-opacity=".35"/>
+          <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+          <stop offset="1" stop-color="#000" stop-opacity=".3"/>
+        </radialGradient>
+        <linearGradient id="pigWhiteG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="1" stop-color="#e6dccd"/>
+        </linearGradient>
+        <radialGradient id="pigEyeG" cx="38%" cy="32%" r="70%">
+          <stop offset="0" stop-color="#5a3622"/>
+          <stop offset=".55" stop-color="#1c110a"/>
+          <stop offset="1" stop-color="#0d0805"/>
+        </radialGradient>
+        <radialGradient id="pigGroundShade" cx="50%" cy="100%" r="70%">
+          <stop offset="0" stop-color="#000" stop-opacity=".28"/>
+          <stop offset="1" stop-color="#000" stop-opacity="0"/>
+        </radialGradient>
+        <!-- 輪郭を毛っぽくふわっとさせる -->
+        <filter id="pigFuzz" x="-6%" y="-8%" width="112%" height="116%">
+          <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <clipPath id="pigBodyClip">
+          <path id="pigBodyPath" d="M52 182 C30 172 24 142 38 124 C50 104 76 92 108 92 C150 76 232 74 280 100 C318 122 324 182 298 210 C272 232 122 234 84 222 C68 214 58 200 52 182 Z"/>
+        </clipPath>
+        <!-- ダッチ柄の白い部分：鼻すじのブレーズと胴の帯 -->
+        <g id="pigPatch" fill="url(#pigWhiteG)">
+          <path d="M80 90 C72 104 58 110 26 112 L18 200 L74 210 C66 176 70 136 94 96 Z"/>
+          <path d="M150 70 C136 120 134 180 148 240 L198 240 C182 182 182 122 196 70 Z"/>
+        </g>
+        <path id="pigEarPath" d="M108 100 C110 84 128 76 146 82 C158 86 158 98 149 104 C139 110 118 110 108 100 Z"/>
+      </defs>
+
+      <ellipse cx="176" cy="229" rx="132" ry="10" fill="url(#pigGroundShade)"/>
+
+      <g class="squash">
+       <g class="purr">
+        <g class="breathe">
+          <!-- 足（体の下からちょこっと見えるだけ） -->
+          <ellipse cx="96" cy="226" rx="11" ry="5" fill="#f0b29a"/>
+          <ellipse cx="252" cy="227" rx="12" ry="5" fill="#f0b29a"/>
+
+          <!-- 体（頭と体がひとつながりの「おにぎり型」） -->
+          <g filter="url(#pigFuzz)">
+            <use href="#pigBodyPath" fill="url(#pigFurG)"/>
+            <g clip-path="url(#pigBodyClip)">
+              <use class="patch" href="#pigPatch"/>
+              <ellipse cx="185" cy="246" rx="190" ry="60" fill="url(#pigGroundShade)" opacity=".7"/>
+              <g class="fur-strokes" stroke-linecap="round" fill="none"></g>
+            </g>
+          </g>
+
+          <!-- 耳：薄い花びら型で少し垂れている -->
+          <g class="ear">
+            <use href="#pigEarPath" style="fill:var(--ear)"/>
+            <path d="M116 99 C118 88 130 83 143 87 C151 90 150 98 144 101 C136 105 122 105 116 99 Z" fill="#f2a9a0" opacity=".4"/>
+          </g>
+
+          <!-- 目：顔の横で黒目がち、光を2つ -->
+          <g class="eye-open">
+            <ellipse cx="82" cy="124" rx="10" ry="11" fill="url(#pigEyeG)"/>
+            <ellipse cx="82" cy="124" rx="10" ry="11" fill="none" stroke="#000" stroke-opacity=".25" stroke-width="1.5"/>
+            <circle cx="78.5" cy="119.5" r="3.6" fill="#fff"/>
+            <circle cx="86" cy="129" r="1.6" fill="#fff" opacity=".8"/>
+          </g>
+          <path class="eye-closed" d="M72 124 Q82 131 92 124" stroke="#2b1d12" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path class="eye-happy" d="M72 127 Q82 116 92 127" stroke="#2b1d12" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+
+          <ellipse class="blush" cx="66" cy="150" rx="11" ry="6.5" fill="#f2918a" opacity=".38"/>
+
+          <!-- あご（もぐもぐで動く）と、くわえた牧草 -->
+          <ellipse class="jaw" cx="44" cy="160" rx="8" ry="4.5" fill="#efe5d8"/>
+          <path class="hay" d="M42 152 L2 166" stroke="#d6bf72" stroke-width="3" stroke-linecap="round"/>
+
+          <!-- 鼻と口とヒゲ（いつもヒクヒク） -->
+          <g class="nose">
+            <ellipse cx="42" cy="140" rx="9" ry="7" fill="#f6d9cf" opacity=".6"/>
+            <path d="M35 138 C37 134 44 134 46 138 C44 141.5 37 141.5 35 138 Z" fill="#8a5a4c"/>
+            <path d="M40.5 141 L40.5 147 M40.5 147 Q37 151 33.5 150 M40.5 147 Q44 151 47.5 150" stroke="#8a5a4c" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <g stroke="#3a2a22" stroke-opacity=".4" stroke-width=".8" fill="none" stroke-linecap="round">
+              <path d="M38 144 Q20 135 3 131"/>
+              <path d="M38 146 Q20 146 2 148"/>
+              <path d="M39 148 Q22 157 7 164"/>
+            </g>
+          </g>
+
+          <g class="zzz"><text x="120" y="70">Z</text><text x="136" y="56">z</text></g>
+        </g>
+       </g>
       </g>
-      <!-- face -->
-      <g class="eye">
-        <circle cx="58" cy="118" r="6.5" fill="#2b1d12"/>
-        <circle cx="56" cy="115.5" r="2" fill="#fff"/>
-      </g>
-      <path class="happy" d="M50 120 Q58 110 66 120" stroke="#2b1d12" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-      <ellipse cx="30" cy="136" rx="9" ry="7" fill="#e58a9a"/>
-      <path d="M30 143 Q38 152 48 146" stroke="#2b1d12" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <ellipse class="cheek" cx="74" cy="142" rx="9" ry="6" fill="#f2a07b" opacity=".6"/>
-      <!-- feet -->
-      <ellipse cx="96" cy="216" rx="20" ry="10" fill="#f2a07b"/>
-      <ellipse cx="240" cy="216" rx="22" ry="10" fill="#f2a07b"/>
     </svg>
   </button>
 </div>
