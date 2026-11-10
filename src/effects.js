@@ -41,6 +41,50 @@ export function flyIcon(text, from, to, { duration = 620, size = 2 } = {}) {
   });
 }
 
+// 小さなかけらを何個か、ばらばらの弧・回転・タイミングで飛ばす
+//   onEach(i) は i 個目が着いたとき、全部着いたら resolve
+export function flyCrumbs(text, from, to, { count = 4, size = 1.4, spreadArc = 1, onEach = () => {} } = {}) {
+  if (reduced() || !Element.prototype.animate) {
+    for (let i = 0; i < count; i++) { onEach(i); }
+    return Promise.resolve();
+  }
+  const L = getLayer();
+  const flights = [];
+  for (let i = 0; i < count; i++) {
+    flights.push(new Promise((resolve) => {
+      const s = document.createElement('span');
+      s.className = 'fx-fly';
+      s.textContent = text;
+      s.style.fontSize = (size * (0.75 + Math.random() * 0.5)).toFixed(2) + 'rem';
+      L.appendChild(s);
+      // 2次ベジェ曲線の制御点をランダムにずらして、毎回ちがう軌道にする
+      const end = { x: to.x + (Math.random() - 0.5) * 16, y: to.y + (Math.random() - 0.5) * 12 };
+      const ctrl = {
+        x: (from.x + end.x) / 2 + (Math.random() - 0.5) * 220 * spreadArc,
+        y: Math.min(from.y, end.y) - (70 + Math.random() * 150) * spreadArc
+      };
+      const spin = (Math.random() < 0.5 ? -1 : 1) * (180 + Math.random() * 360);
+      const frames = [];
+      const N = 10;
+      for (let k = 0; k <= N; k++) {
+        const t = k / N;
+        const x = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * ctrl.x + t * t * end.x;
+        const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * ctrl.y + t * t * end.y;
+        const sc = t < 0.2 ? 0.5 + t * 3 : 1.1 - (t - 0.2) * 0.5;
+        frames.push({ transform: `translate(${x}px, ${y}px) translate(-50%,-50%) rotate(${spin * t}deg) scale(${sc.toFixed(2)})` });
+      }
+      const a = s.animate(frames, {
+        duration: 480 + Math.random() * 300,
+        delay: i * (50 + Math.random() * 60),
+        easing: 'cubic-bezier(.35,.1,.6,1)',
+        fill: 'backwards'
+      });
+      a.onfinish = () => { s.remove(); onEach(i); resolve(); };
+    }));
+  }
+  return Promise.all(flights);
+}
+
 // 点からキラキラが飛び散る
 export function burst(p, { count = 12, chars = ['✦', '♥', '✧'], colors = ['#ffd23f', '#ff7a9a', '#fff3b0'], spread = 70 } = {}) {
   if (reduced() || !Element.prototype.animate) { return; }

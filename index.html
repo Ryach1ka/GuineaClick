@@ -9,10 +9,27 @@
 <body>
 <div class="topbar">
   <div class="group">
-    <button id="bgmBtn" type="button">🎵</button>
-    <button id="soundBtn" type="button">🔇</button>
+    <button id="mixerBtn" type="button" aria-label="音量" aria-expanded="false" aria-controls="mixer">🔊</button>
+    <div class="mixer" id="mixer" hidden>
+      <div class="mix-row">
+        <button id="bgmBtn" type="button" class="mix-toggle">🎵</button>
+        <label for="bgmVol">BGM</label>
+        <input id="bgmVol" type="range" min="0" max="100" step="5">
+        <output id="bgmVolOut" for="bgmVol"></output>
+      </div>
+      <div class="mix-row">
+        <button id="soundBtn" type="button" class="mix-toggle">🔔</button>
+        <label for="sfxVol">効果音</label>
+        <input id="sfxVol" type="range" min="0" max="100" step="5">
+        <output id="sfxVolOut" for="sfxVol"></output>
+      </div>
+    </div>
   </div>
-  <button id="achBtn" type="button">🏆 0/0</button>
+  <div class="group">
+    <button id="giftBtn" type="button" class="gift" hidden>🎁 <span id="giftCount">1</span></button>
+    <button id="moveBtn" type="button" aria-label="お引っ越しと思い出">🏡</button>
+    <button id="achBtn" type="button">🏆 0/0</button>
+  </div>
 </div>
 <div class="score">
   <div class="n" id="count">0</div>
@@ -133,6 +150,43 @@
   <div class="card">
     <h2><span id="achTitle">🏆 実績</span><button id="achClose" type="button" aria-label="閉じる">✕</button></h2>
     <ul id="achList"></ul>
+  </div>
+</div>
+
+<div class="overlay" id="draftPanel" role="dialog" aria-modal="true" aria-labelledby="draftTitle">
+  <div class="card draft-card">
+    <h2 id="draftTitle">🎁 おやつカードをえらぼう</h2>
+    <p class="draft-sub" id="draftSub"></p>
+    <div class="draft-list" id="draftList"></div>
+    <div class="draft-foot">
+      <button id="rerollBtn" type="button" class="secondary">🔄 ひきなおす</button>
+      <button id="draftLater" type="button" class="secondary">あとで</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="movePanel" role="dialog" aria-modal="true" aria-labelledby="moveTitle">
+  <div class="card move-card">
+    <h2><span id="moveTitle">🏡 お引っ越し</span><button id="moveClose" type="button" aria-label="閉じる">✕</button></h2>
+    <section class="run-sum" id="runSum"></section>
+    <button id="moveGo" type="button" class="primary wide">お引っ越しする</button>
+    <p class="hint-text" id="moveHint"></p>
+    <h3>今回のおやつ</h3>
+    <ul class="mycards" id="myCards"></ul>
+    <h3>思い出ショップ <span class="mem" id="memBalance"></span></h3>
+    <ul class="metashop" id="metaShop"></ul>
+    <h3>記録</h3>
+    <div class="records" id="records"></div>
+  </div>
+</div>
+
+<div class="overlay" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+  <div class="card welcome-card">
+    <div class="welcome-pig" aria-hidden="true">🐹💤</div>
+    <h2 id="welcomeTitle">おかえり！</h2>
+    <p><span id="welcomeTime"></span>のおるすばん中に<br>みんなでハートをあつめたよ</p>
+    <p class="welcome-amount" id="welcomeAmount"></p>
+    <button id="welcomeOk" type="button" class="primary">うけとる</button>
   </div>
 </div>
 

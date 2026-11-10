@@ -57,10 +57,10 @@ describe('値段と購入', () => {
 });
 
 describe('品物の解放', () => {
-  it('累計が値段の半分に届いたら見える', () => {
+  it('この周で集めたハートが値段の半分に届いたら見える', () => {
     const { g } = setup({ stats: { earned: 74 } });
     expect(g.isUnlocked(item('friend'))).toBe(false);
-    g.stats.earned = 75;
+    g.state.run.earned = 75;
     expect(g.isUnlocked(item('friend'))).toBe(true);
   });
 
@@ -122,6 +122,86 @@ describe('実績', () => {
   it('実績の id は重複していない', () => {
     const ids = data.achievements.map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+const upg = (id) => data.upgrades.find((u) => u.id === id);
+
+describe('強化', () => {
+  it('条件を満たすまで出てこない', () => {
+    const { g } = setup({ owned: { hay: 9 } });
+    expect(g.availableUpgrades().map((u) => u.id)).not.toContain('hay1');
+    g.state.owned.hay = 10;
+    expect(g.availableUpgrades().map((u) => u.id)).toContain('hay1');
+  });
+
+  it('品物の効果が2倍になる（タップ・毎秒）', () => {
+    const { g } = setup({ count: 1e6, owned: { hay: 10, carrot: 10 } });
+    expect(g.baseClick()).toBe(11);
+    expect(g.buyUpgrade(upg('hay1'))).toBe(true);
+    expect(g.baseClick()).toBe(21);
+    g.buyUpgrade(upg('carrot1'));
+    expect(g.basePerSec()).toBe(20);
+    expect(g.itemPerSec(item('carrot'))).toBe(2);
+  });
+
+  it('同じ品物の強化は掛け算で重なる', () => {
+    const { g } = setup({ count: 1e6, owned: { hay: 25 } });
+    g.buyUpgrade(upg('hay1'));
+    g.buyUpgrade(upg('hay2'));
+    expect(g.itemMult('hay')).toBe(4);
+  });
+
+  it('お金が足りない・買い済みなら買えない', () => {
+    const { g } = setup({ count: 599, owned: { hay: 10 } });
+    expect(g.buyUpgrade(upg('hay1'))).toBe(false);
+    g.state.count = 600;
+    expect(g.buyUpgrade(upg('hay1'))).toBe(true);
+    expect(g.state.count).toBe(0);
+    g.state.count = 600;
+    expect(g.buyUpgrade(upg('hay1'))).toBe(false);
+    expect(g.availableUpgrades().map((u) => u.id)).not.toContain('hay1');
+  });
+
+  it('なでなで上手：タップに毎秒の1%が加わる', () => {
+    const { g } = setup({ count: 1e6, owned: { carrot: 1000 }, stats: { taps: 200 } });
+    g.buyUpgrade(upg('tap1'));
+    expect(g.baseClick()).toBe(1 + 10);
+  });
+
+  it('ごきげん長持ち：ごきげんタイムが10秒のびる', () => {
+    const { g, clock } = setup({ count: 1e6, stats: { golden: 6 }, rand: 0.1 });
+    g.buyUpgrade(upg('gold2'));
+    g.claimGolden();
+    clock.t += data.golden.buffMs + 9000;
+    expect(g.mult()).toBe(data.golden.buffMult);
+  });
+
+  it('強化の id は重複していない', () => {
+    const ids = data.upgrades.map((u) => u.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('オフライン報酬', () => {
+  it('毎秒の量 × 時間 × 割合をもらえる', () => {
+    const { g } = setup({ owned: { carrot: 10 } }); // 毎秒10
+    const r = g.applyOffline(3600 * 1000);
+    expect(r.amount).toBe(10 * 3600 * data.offline.rate);
+    expect(g.state.count).toBe(r.amount);
+  });
+
+  it('上限時間を超えた分はもらえない', () => {
+    const { g } = setup({ owned: { carrot: 10 } });
+    const r = g.applyOffline(48 * 3600 * 1000);
+    expect(r.ms).toBe(data.offline.maxHours * 3600 * 1000);
+  });
+
+  it('短い不在や時刻のずれでは何も起きない', () => {
+    const { g } = setup({ owned: { carrot: 10 } });
+    expect(g.applyOffline(10 * 1000).amount).toBe(0);
+    expect(g.applyOffline(-5000).amount).toBe(0);
+    expect(g.applyOffline(NaN).amount).toBe(0);
   });
 });
 

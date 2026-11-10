@@ -79,5 +79,10 @@ export function createDecor(layerEl) {
     return added;
   }
 
-  return { sync };
+  // お引っ越しのときに全部片付ける
+  function reset() {
+    Object.keys(placed).forEach((k) => { placed[k].remove(); delete placed[k]; });
+  }
+
+  return { sync, reset };
 }

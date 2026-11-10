@@ -17,14 +17,14 @@ function memoryStorage(initial = {}) {
 describe('セーブ', () => {
   it('空なら 0 から始まる', () => {
     const s = createStore(memoryStorage());
-    expect(s.load()).toEqual({ count: 0, owned: {}, stats: null });
+    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
   });
 
   it('書いたものがそのまま読める', () => {
     const storage = memoryStorage();
     const s = createStore(storage);
     const g = createGame(data);
-    g.init({ count: 0, owned: {}, stats: null });
+    g.init({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
     g.pet(); g.pet();
     g.state.owned.hay = 3;
     s.write(g);
@@ -40,24 +40,50 @@ describe('セーブ', () => {
       'morumotto:count': '123',
       'morumotto:owned': '{"carrot":4}'
     }));
-    expect(s.load()).toEqual({ count: 123, owned: { carrot: 4 }, stats: null });
+    expect(s.load()).toEqual({ count: 123, owned: { carrot: 4 }, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
+  });
+
+  it('強化と最後に保存した時刻も保存される', () => {
+    const storage = memoryStorage();
+    const s = createStore(storage, { now: () => 1234567 });
+    const g = createGame(data);
+    g.init({ count: 0, owned: {}, stats: null });
+    g.state.upgrades.hay1 = true;
+    s.write(g);
+    const loaded = s.load();
+    expect(loaded.upgrades).toEqual({ hay1: true });
+    expect(loaded.lastSeen).toBe(1234567);
   });
 
   it('壊れたデータでも落ちない', () => {
     const s = createStore(memoryStorage({ 'morumotto:owned': '{壊れてる', 'morumotto:count': 'abc' }));
-    expect(s.load()).toEqual({ count: 0, owned: {}, stats: null });
+    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
   });
 
-  it('効果音は最初オフ、BGM は最初オン', () => {
+  it('効果音も BGM も最初はオン、音量は 50%', () => {
     const s = createStore(memoryStorage());
-    expect(s.loadSettings()).toEqual({ sound: false, bgm: true });
-    s.writeSettings({ sound: true, bgm: false });
-    expect(s.loadSettings()).toEqual({ sound: true, bgm: false });
+    expect(s.loadSettings()).toEqual({ sound: true, bgm: true, sfxVol: 0.5, bgmVol: 0.5 });
+    s.writeSettings({ sound: false, bgm: false, sfxVol: 0.2, bgmVol: 0.9 });
+    expect(s.loadSettings()).toEqual({ sound: false, bgm: false, sfxVol: 0.2, bgmVol: 0.9 });
   });
 
-  it('BGM 設定がない古いセーブでも BGM はオン', () => {
-    const s = createStore(memoryStorage({ 'morumotto:settings': '{"sound":true}' }));
-    expect(s.loadSettings()).toEqual({ sound: true, bgm: true });
+  it('設定が足りない古いセーブや変な値でも、足りない分は初期値になる', () => {
+    const s = createStore(memoryStorage({ 'morumotto:settings': '{"sound":false,"bgmVol":7}' }));
+    expect(s.loadSettings()).toEqual({ sound: false, bgm: true, sfxVol: 0.5, bgmVol: 0.5 });
+  });
+
+  it('周回の状態と思い出も保存される', () => {
+    const storage = memoryStorage();
+    const s = createStore(storage);
+    const g = createGame(data);
+    g.init({ count: 0, owned: {}, stats: null });
+    g.state.run.cards.push('glutton');
+    g.meta.memories = 42;
+    s.write(g);
+    const g2 = createGame(data);
+    g2.init(s.load());
+    expect(g2.run.cards).toEqual(['glutton']);
+    expect(g2.meta.memories).toBe(42);
   });
 });
 

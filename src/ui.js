@@ -4,9 +4,12 @@ import { formatNumber } from './format.js';
 import { createSound } from './sound.js';
 import { createPig } from './pig.js';
 import { createDecor } from './decor.js';
-import { flyIcon, burst, confetti, floatLabel, centerOf } from './effects.js';
+import { flyIcon, flyCrumbs, burst, confetti, floatLabel, centerOf } from './effects.js';
+import { setupMixer } from './mixer.js';
+import { createCounter } from './counter.js';
+import { setupRunUI } from './runui.js';
 
-export function startUI({ data, game, store }) {
+export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
   const $ = (id) => document.getElementById(id);
   const el = $('count');
   const pig = $('pig');
@@ -19,8 +22,6 @@ export function startUI({ data, game, store }) {
   const achBtn = $('achBtn');
   const achPanel = $('achPanel');
   const achList = $('achList');
-  const soundBtn = $('soundBtn');
-  const bgmBtn = $('bgmBtn');
   const decor = createDecor($('decor'));
 
   const buttons = {};      // 品物id → ボタン
@@ -28,16 +29,25 @@ export function startUI({ data, game, store }) {
   let bubbleTimer = null;
   let wasFever = false;
   const settings = store.loadSettings();
-  const sound = createSound({ sfxOn: () => settings.sound, bgmOn: () => settings.bgm });
+  const sound = createSound({
+    sfxOn: () => settings.sound, bgmOn: () => settings.bgm,
+    sfxVol: () => settings.sfxVol, bgmVol: () => settings.bgmVol
+  });
   const pigSvg = $('pigSvg');
   const pigCtl = createPig(pigSvg);
 
   const fmt = (n) => formatNumber(n, data.units);
   const save = () => store.write(game);
 
+  // 大きな数字：なめらかに数え上がり、桁が上がったらお祝い
+  const counter = createCounter(el, fmt, {
+    onDigitUp: () => {
+      sound.digitUp();
+      burst(centerOf(el), { count: 22, spread: 120, chars: ['✦', '♥', '✧', '✨'] });
+    }
+  });
   function renderCount() {
-    el.textContent = fmt(game.state.count);
-    el.title = Math.floor(game.state.count).toLocaleString('ja-JP');
+    counter.set(game.state.count);
   }
 
   function bump(node, cls) {
@@ -46,28 +56,8 @@ export function startUI({ data, game, store }) {
     node.classList.add(cls);
   }
 
-  // ---------- 音のボタン ----------
-  function renderSound() {
-    soundBtn.textContent = settings.sound ? '🔊' : '🔇';
-    soundBtn.setAttribute('aria-label', settings.sound ? '効果音を消す' : '効果音を出す');
-    soundBtn.setAttribute('aria-pressed', String(settings.sound));
-    bgmBtn.textContent = '🎵';
-    bgmBtn.classList.toggle('off', !settings.bgm);
-    bgmBtn.setAttribute('aria-label', settings.bgm ? 'BGMを止める' : 'BGMを流す');
-    bgmBtn.setAttribute('aria-pressed', String(settings.bgm));
-  }
-  soundBtn.addEventListener('click', () => {
-    settings.sound = !settings.sound;
-    store.writeSettings(settings);
-    renderSound();
-    sound.squeak();
-  });
-  bgmBtn.addEventListener('click', () => {
-    settings.bgm = !settings.bgm;
-    store.writeSettings(settings);
-    renderSound();
-    sound.syncBgm();
-  });
+  // ---------- 音（ミキサー） ----------
+  setupMixer({ settings, store, sound });
   // ブラウザは最初の操作までは音を出せないので、どこかを触った時点で BGM を始める
   const unlockAudio = () => {
     sound.unlock();
@@ -77,8 +67,64 @@ export function startUI({ data, game, store }) {
   window.addEventListener('pointerdown', unlockAudio, true);
   window.addEventListener('keydown', unlockAudio, true);
 
+  // ---------- 強化（ショップの上の横スクロール列） ----------
+  const upgRow = document.createElement('div');
+  upgRow.className = 'upgrades';
+  upgRow.setAttribute('role', 'group');
+  upgRow.setAttribute('aria-label', '強化');
+  const upgButtons = {};
+  let upgKey = '';
+
+  function refreshUpgrades() {
+    const list = game.availableUpgrades();
+    const key = list.map((u) => u.id).join(',');
+    if (key !== upgKey) {
+      upgKey = key;
+      upgRow.innerHTML = '';
+      list.forEach((u) => {
+        const b = upgButtons[u.id] || makeUpgradeButton(u);
+        upgRow.appendChild(b);
+      });
+    }
+    upgRow.hidden = list.length === 0;
+    list.forEach((u) => { upgButtons[u.id].disabled = game.state.count < u.cost; });
+  }
+
+  function makeUpgradeButton(u) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'upg';
+    b.innerHTML = '<span class="ui"></span><span class="un"></span><span class="ud"></span><span class="up"></span>';
+    b.querySelector('.ui').textContent = u.icon;
+    b.querySelector('.un').textContent = u.name;
+    b.querySelector('.ud').textContent = u.desc;
+    b.querySelector('.up').textContent = '♥ ' + fmt(u.cost);
+    b.setAttribute('aria-label', `強化：${u.name}、${u.desc}、ハート${fmt(u.cost)}`);
+    b.addEventListener('click', () => onBuyUpgrade(u, b));
+    upgButtons[u.id] = b;
+    return b;
+  }
+
+  function onBuyUpgrade(u, b) {
+    if (!game.buyUpgrade(u)) { return; }
+    const from = centerOf(b);
+    renderCount();
+    save();
+    sound.fanfare();
+    floatLabel('−♥' + fmt(u.cost), centerOf(el, 1.05, 0.1), 'minus');
+    burst(from, { count: 12, spread: 50 });
+    flyIcon(u.icon, from, centerOf(pigSvg, 0.2, 0.5)).then(() => {
+      pigCtl.popcorn();
+      burst(centerOf(pigSvg, 0.5, 0.45), { count: 18, chars: ['✦', '✧', '✨'], spread: 110 });
+      sayLine('パワーアップ！');
+    });
+    toast('✨ 強化：' + u.name, u.desc);
+    afterChange();
+  }
+
   // ---------- ショップ ----------
   function buildShop() {
+    shop.appendChild(upgRow);
     data.items.forEach((it) => {
       const b = document.createElement('button');
       b.className = 'item';
@@ -86,7 +132,6 @@ export function startUI({ data, game, store }) {
       b.innerHTML = '<span class="ic"><span class="em"></span><span class="cnt"></span></span><span class="nm"></span><span class="ds"></span><span class="pr"></span>';
       b.querySelector('.em').textContent = it.icon;
       b.querySelector('.nm').textContent = it.name;
-      b.querySelector('.ds').textContent = it.desc;
       b.addEventListener('click', () => onBuy(it, b));
       buttons[it.id] = b;
       shop.appendChild(b);
@@ -99,7 +144,11 @@ export function startUI({ data, game, store }) {
     shop.appendChild(lockedBtn);
   }
 
+  // 品物1個の効果の説明（強化込み）
+  const itemDesc = (it) => (it.click ? 'なでる力 +' + fmt(game.itemClick(it)) : '毎秒 +' + fmt(game.itemPerSec(it)));
+
   function refreshShop() {
+    refreshUpgrades();
     let nextLocked = null;
     data.items.forEach((it) => {
       const b = buttons[it.id];
@@ -115,8 +164,10 @@ export function startUI({ data, game, store }) {
       cnt.textContent = n > 0 ? fmt(n) : '';
       cnt.hidden = n === 0;
       b.querySelector('.pr').textContent = '♥ ' + fmt(c);
+      const desc = itemDesc(it);
+      b.querySelector('.ds').textContent = desc;
       b.disabled = game.state.count < c;
-      b.setAttribute('aria-label', `${it.name}（${n}こ持っている）${it.desc}、ハート${fmt(c)}`);
+      b.setAttribute('aria-label', `${it.name}（${n}こ持っている）${desc}、ハート${fmt(c)}`);
     });
     lockedBtn.hidden = !nextLocked;
     if (nextLocked) {
@@ -168,17 +219,52 @@ export function startUI({ data, game, store }) {
     // 数字：使ったハートと、増えた力をふわっと出す
     // 使ったハートは大きい数字の右肩、増えた力は「毎秒/タップ」の下に出す
     floatLabel('−♥' + fmt(price), centerOf(el, 1.05, 0.1), 'minus');
-    const gainText = it.click ? 'タップ +' + fmt(it.click) : '毎秒 +' + fmt(it.perSec);
+    const gainText = it.click ? 'タップ +' + fmt(game.itemClick(it)) : '毎秒 +' + fmt(game.itemPerSec(it));
     floatLabel(gainText, centerOf(rateEl, 0.5, 1.6), 'plus');
 
-    // アイコンが本体（仲間・飾りはその場所）へ飛んでいって、モルモットが反応する
+    // アイコンが何個かのかけらになって、毎回ちがう弧を描いて飛んでいく
+    //   たべもの → 口元へ「パクッ、パクッ」 / それ以外 → 体のほうへ
     const from = centerOf(b.querySelector('.ic'));
-    const head = centerOf(pigSvg, 0.2, 0.5);
-    flyIcon(it.icon, from, head).then(() => {
-      reactTo(it, owned);
-    });
+    const isFood = it.react === 'chew';
+    const to = isFood ? mouthPos() : centerOf(pigSvg, 0.45, 0.45);
+    let first = true;
+    flyCrumbs(it.icon, from, to, {
+      count: isFood ? 3 + Math.floor(Math.random() * 3) : 2,
+      size: isFood ? 1.3 : 1.9,
+      onEach: (i) => {
+        if (isFood) {
+          sound.nom(i);
+          gulp();
+          burst(mouthPos(), { count: 4, spread: 26, chars: ['✦', '·', '♥'] });
+          if (first) { pigCtl.chew(); }
+        }
+        first = false;
+      }
+    }).then(() => reactTo(it, owned));
 
     afterChange();
+  }
+
+  // 口元（ヒゲのあたり）の画面座標
+  const mouthPos = () => centerOf(pigSvg, 0.12, 0.58);
+
+  // パクッと食べたときに体が少しつぶれる
+  function gulp() {
+    if (!pigSvg.animate) { return; }
+    pigSvg.animate(
+      [{ transform: 'scale(1,1)' }, { transform: 'scale(1.04,.95)', offset: 0.4 }, { transform: 'scale(1,1)' }],
+      { duration: 160, easing: 'ease-out', composite: 'add' }
+    );
+  }
+
+  // ときどき出る「大好物！」の当たり演出（見た目だけ）
+  function jackpot() {
+    sound.jackpot();
+    const p = centerOf(pigSvg, 0.4, 0.4);
+    burst(p, { count: 26, spread: 150, chars: ['♥', '✦', '♥', '✨'], colors: ['#ff7a9a', '#ffd23f', '#ff9ab0'] });
+    confetti(stage.getBoundingClientRect(), { count: 24 });
+    floatLabel('大好物！！', centerOf(pigSvg, 0.4, 0.05), 'jackpot');
+    pigCtl.popcorn();
   }
 
   function reactTo(it, owned) {
@@ -186,8 +272,8 @@ export function startUI({ data, game, store }) {
     const line = it.lines[Math.floor(Math.random() * it.lines.length)];
     sound.land();
     if (it.react === 'chew') {
-      pigCtl.chew();
       burst(head, { count: 10 });
+      if (Math.random() < 0.15) { jackpot(); sayLine('大好物！！'); return; }
     } else if (it.react === 'friend') {
       const added = syncHerd(true);
       pigCtl.popcorn();
@@ -244,9 +330,10 @@ export function startUI({ data, game, store }) {
     bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 900);
   }
 
-  function onPet(ev) {
-    const gain = game.pet();
+  function onPet(ev, { drag = false } = {}) {
+    const gain = game.pet({ drag });
     renderCount();
+    counter.pop(gain);
     save();
     const woke = animatePig();
     const rect = stage.getBoundingClientRect();
@@ -341,7 +428,8 @@ export function startUI({ data, game, store }) {
   // ---------- きんのにんじん ----------
   function scheduleGolden() {
     const g = data.golden;
-    setTimeout(() => spawnGolden(false), g.minWait + Math.random() * (g.maxWait - g.minWait));
+    const wait = (g.minWait + Math.random() * (g.maxWait - g.minWait)) * game.goldenWaitMult();
+    setTimeout(() => spawnGolden(false), wait);
   }
 
   // manual が true のとき（動作確認用）は、消えたあと次を予約しない
@@ -369,14 +457,14 @@ export function startUI({ data, game, store }) {
       const y = bx.top - rect.top;
       sound.golden();
       if (r.type === 'buff') {
-        toast('✨ ごきげんタイム！', (data.golden.buffMs / 1000) + '秒間、ハートが ×' + data.golden.buffMult);
+        toast('✨ ごきげんタイム！', (game.buffMs() / 1000) + '秒間、ハートが ×' + data.golden.buffMult);
         flyText(x, y, '×' + data.golden.buffMult + '!', 'gold');
         speak();
       } else {
         toast('🥕 きんのにんじん！', 'ハート +' + fmt(r.amount));
         flyText(x, y, '♥+' + fmt(r.amount), 'gold');
         renderCount();
-        bump(el, 'bump');
+        counter.pop(r.amount);
       }
       save();
       remove();
@@ -396,6 +484,8 @@ export function startUI({ data, game, store }) {
     t.appendChild(b);
     t.appendChild(document.createTextNode(body));
     toasts.appendChild(t);
+    // 一度にたくさん出たら古いものから消す
+    while (toasts.children.length > 3) { toasts.firstChild.remove(); }
     setTimeout(() => t.remove(), 2800);
   }
 
@@ -436,13 +526,30 @@ export function startUI({ data, game, store }) {
   });
 
   function afterChange() {
+    runUI.check();
     checkAch();
     refresh();
   }
 
+  // ---------- 周回（おやつカード・お引っ越し） ----------
+  const runUI = setupRunUI({
+    data, game, fmt, sound, toast, save, pigSvg,
+    onChange: () => { renderCount(); refresh(); checkAch(); },
+    onMoved: () => {
+      // 新しい周：仲間・飾りを片付けて、ショップを最初の状態に
+      herd.innerHTML = '';
+      decor.reset();
+      syncHerd(false);
+      decor.sync(game.ownedOf, false);
+      counter.snap(game.state.count);
+      afterChange();
+      sayLine('新しいおうち！');
+      pigCtl.popcorn();
+    }
+  });
+
   // ---------- 開始 ----------
   buildShop();
-  renderSound();
   renderCount();
   syncHerd(false);
   decor.sync(game.ownedOf, false);
@@ -459,7 +566,7 @@ export function startUI({ data, game, store }) {
     if (drag.dist >= 60) {
       drag.dist = 0;
       drag.moved = true;
-      onPet(e);
+      onPet(e, { drag: true });
     }
   });
   // click は pointerup のあとに来るので、少し遅らせて片付ける
@@ -473,13 +580,42 @@ export function startUI({ data, game, store }) {
   });
   scheduleGolden();
 
+  // 実際に経った時間で進める（タブを裏に回してタイマーが間引かれても、生産がずれないように）
+  let lastTick = Date.now();
   setInterval(() => {
-    if (game.tick(data.tickMs) > 0) {
+    const t = Date.now();
+    const ms = Math.min(Math.max(0, t - lastTick), data.offline.maxHours * 3600 * 1000);
+    lastTick = t;
+    if (game.tick(ms) > 0) {
       renderCount();
       refreshShop();
+      runUI.check();
     }
     refreshRate();
   }, data.tickMs);
+
+  // ---------- おかえり（オフライン報酬） ----------
+  function showWelcome() {
+    const panel = $('welcome');
+    const h = Math.floor(offline.ms / 3600000);
+    const m = Math.floor((offline.ms % 3600000) / 60000);
+    const time = (h ? h + '時間' : '') + (m || !h ? m + '分' : '');
+    $('welcomeTime').textContent = time;
+    $('welcomeAmount').textContent = '♥ ' + fmt(offline.amount);
+    panel.classList.add('open');
+    const ok = $('welcomeOk');
+    ok.focus();
+    ok.addEventListener('click', () => {
+      panel.classList.remove('open');
+      counter.pop(offline.amount);
+      burst(centerOf(el), { count: 16, spread: 90 });
+      floatLabel('+♥' + fmt(offline.amount), centerOf(el, 1.05, 0.1), 'plus');
+      sayLine('おかえり〜！');
+      pigCtl.popcorn();
+      sound.land();
+    }, { once: true });
+  }
+  if (offline.amount > 0) { showWelcome(); }
   setInterval(() => { checkAch(); refresh(); save(); }, data.autosaveMs);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { save(); }

@@ -18,10 +18,13 @@ const BASS = [48, 45, 41, 43, 48, 45, 41, 43];       // 小節ごとの根音
 const CHORDS = [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]];
 const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-export function createSound({ sfxOn, bgmOn }) {
+// sfxVol / bgmVol は 0〜1（50% で今までの音量）
+export function createSound({ sfxOn, bgmOn, sfxVol = () => 0.5, bgmVol = () => 0.5 }) {
   let ctx = null;
   let sfxBus = null;
   let bgmBus = null;
+  const sfxGain = () => sfxVol() * 2;
+  const bgmGain = () => bgmVol() * 1.4;
 
   function ensure() {
     if (ctx) { return ctx; }
@@ -29,11 +32,20 @@ export function createSound({ sfxOn, bgmOn }) {
     if (!AC) { return null; }
     ctx = new AC();
     sfxBus = ctx.createGain();
+    sfxBus.gain.value = sfxGain();
     sfxBus.connect(ctx.destination);
     bgmBus = ctx.createGain();
     bgmBus.gain.value = 0;
     bgmBus.connect(ctx.destination);
     return ctx;
+  }
+
+  // ミキサーのスライダーを動かしたら呼ぶ
+  function applyVolumes() {
+    if (!ctx) { return; }
+    const t = ctx.currentTime;
+    sfxBus.gain.setTargetAtTime(sfxGain(), t, 0.05);
+    if (timer) { bgmBus.gain.cancelScheduledValues(t); bgmBus.gain.setTargetAtTime(bgmGain(), t, 0.05); }
   }
 
   // ---- 効果音 ----
@@ -107,7 +119,7 @@ export function createSound({ sfxOn, bgmOn }) {
     step = 0;
     bgmBus.gain.cancelScheduledValues(ctx.currentTime);
     bgmBus.gain.setValueAtTime(0, ctx.currentTime);
-    bgmBus.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 1.2);
+    bgmBus.gain.linearRampToValueAtTime(bgmGain(), ctx.currentTime + 1.2);
     scheduler();
     timer = setInterval(scheduler, 100);
   }
@@ -142,10 +154,17 @@ export function createSound({ sfxOn, bgmOn }) {
   return {
     unlock,
     syncBgm,
+    applyVolumes,
     squeak: () => tone([950 + Math.random() * 300], 0.13),
     buy: () => tone([700, 1050], 0.1, 0.06),
     golden: () => tone([800, 1000, 1250, 1600], 0.11, 0.07),
     land: () => tone([1200, 1500], 0.08, 0.05),
-    fanfare: () => tone([660, 830, 990, 1320], 0.14, 0.08)
+    // パクッ（かけらごとに少しずつ音程を上げる）
+    nom: (i = 0) => tone([620 * Math.pow(1.12, i) * (0.97 + Math.random() * 0.06)], 0.07, 0.06),
+    jackpot: () => tone([780, 980, 1170, 1560, 1960], 0.1, 0.08),
+    digitUp: () => tone([990, 1320, 1760], 0.12, 0.07),
+    card: () => tone([520, 780, 1040], 0.12, 0.07),
+    fanfare: () => tone([660, 830, 990, 1320], 0.14, 0.08),
+    move: () => tone([523, 659, 784, 1047, 1319, 1568], 0.16, 0.08)
   };
 }
