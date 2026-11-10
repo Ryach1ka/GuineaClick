@@ -1,20 +1,29 @@
 // game.js — ゲームの状態と計算（画面には触らない）
 // now / random を差し替えられるので、テストで時間や運を固定できる
 //
+// 冬ごもり：夜（制限時間）のあいだにハートを集め、夜の終わりにノルマ分を払う。
+// 払えなければその冬は終わり。5夜を越えればクリア。越えた夜の数だけ思い出がもらえる。
+//
 // 状態は3つに分かれている
-//   state: この周回のもの（ハート・品物・強化・おやつカード）。お引っ越しでリセット
+//   state: 今の冬のもの（ハート・品物・強化・おやつカード・何夜目か）。新しい冬でリセット
 //   stats: ずっと残る記録（なでた回数・累計ハート・実績）
-//   meta:  周回をまたいで残るもの（思い出・思い出ショップ・周回の記録）
+//   meta:  何回遊んでも残るもの（思い出・思い出ショップ・記録）
 
 export function createGame(data, { now = Date.now, random = Math.random } = {}) {
+  const W = data.winter;
+
+  // phase: 'break'（作戦タイム。時間は止まっている） / 'night'（夜。時間が進む） / 'over'（負け） / 'clear'（冬を越えた）
   const newRun = () => ({
+    phase: 'break',
+    night: 1,           // 何夜目か（次に来る夜 / 今の夜）
+    timeLeft: 0,        // 夜の残り時間（ミリ秒）
+    playMs: 0,          // 夜を過ごした合計時間
     cards: [],          // 選んだおやつカードの id
     pending: 0,         // まだ選んでいないおやつの数
     offer: null,        // 今出ている選択肢（リロードで引き直せないよう保存する）
-    earned: 0,          // この周で集めたハート
-    startedAt: now(),
-    draftIdx: 0,        // 次のおやつのしきい値の位置
-    rerollsUsed: 0
+    earned: 0,          // この冬で集めたハート
+    rerollsUsed: 0,
+    result: null        // 終わったときの結果 { win, nights, memories, earned }
   });
 
   const state = {
@@ -36,31 +45,49 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
   const meta = {
     memories: 0,   // 思い出（思い出ショップで使う）
     unlocks: {},   // 思い出ショップで買ったもの { reroll: 2, ... }（数字はレベル）
-    runs: 0,       // お引っ越しした回数
+    games: 0,      // 冬ごもりに挑戦した回数（終わった回数）
+    clears: 0,     // 冬を越えた回数
+    bestNights: 0, // いちばん多く越えた夜の数
     best: { earned: 0, perSec: 0 },
-    history: []    // 最近の周回 [{ earned, ms, memories, perSec, cards }]
+    history: []    // 最近の冬 [{ win, nights, earned, ms, memories, cards }]
   };
 
+  const metaLevel = (id) => meta.unlocks[id] || 0;
+
+  // 新しい冬の始まり（思い出ショップの効果をのせる）
+  function freshRun() {
+    state.count = 0;
+    state.owned = metaLevel('starter') ? { hay: 2 } : {};
+    state.upgrades = {};
+    state.frac = 0;
+    state.buffUntil = 0;
+    state.run = newRun();
+    if (metaLevel('early')) { state.run.pending = 1; }
+  }
+
   function init(saved) {
-    state.count = saved.count;
-    state.owned = saved.owned;
-    state.upgrades = saved.upgrades || {};
     const s = saved.stats || {};
     stats.taps = s.taps || 0;
-    // 最初のバージョンのセーブには累計がないので、今のハート数から始める
-    stats.earned = typeof s.earned === 'number' ? s.earned : saved.count;
+    stats.earned = typeof s.earned === 'number' ? s.earned : saved.count || 0;
     stats.golden = s.golden || 0;
     stats.ach = s.ach || {};
-    // 周回の仕組みがなかった頃のセーブは、今までの分を「1周目」として続ける
-    state.run = Object.assign(newRun(), saved.run || { earned: stats.earned });
     Object.assign(meta, saved.meta || {});
     meta.best = Object.assign({ earned: 0, perSec: 0 }, meta.best);
+    meta.history = meta.history || [];
+    // 冬ごもりの形になっているセーブだけ続きから。それより前のセーブは新しい冬から始める
+    if (saved.run && saved.run.phase) {
+      state.count = saved.count;
+      state.owned = saved.owned || {};
+      state.upgrades = saved.upgrades || {};
+      state.run = Object.assign(newRun(), saved.run);
+    } else {
+      freshRun();
+    }
   }
 
   const ownedOf = (id) => state.owned[id] || 0;
 
   // ---- 思い出ショップ ----
-  const metaLevel = (id) => meta.unlocks[id] || 0;
   function metaCost(u) {
     const lv = metaLevel(u.id);
     if (Array.isArray(u.cost)) { return lv < u.cost.length ? u.cost[lv] : null; }
@@ -81,7 +108,7 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     const m = {
       tagCount: {}, tagMult: {}, itemMult: {}, perItemPerSec: {}, costGrowth: {},
       globalPct: 0, clickPerFriend: 0, dragMult: 1, clickMult: 1, perSecMult: 1,
-      clickPctOfPerSec: 0, goldenWait: 1, instantMult: 1, buffMultPlus: 0, offlineRate: null
+      clickPctOfPerSec: 0, goldenWait: 1, instantMult: 1, buffMultPlus: 0, nightPlusMs: 0
     };
     const cs = ownedCards();
     cs.forEach((c) => c.tags.forEach((t) => { m.tagCount[t] = (m.tagCount[t] || 0) + 1; }));
@@ -101,7 +128,7 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
       m.goldenWait *= e.goldenWait || 1;
       m.instantMult *= e.instantMult || 1;
       m.buffMultPlus += e.buffMultPlus || 0;
-      if (e.offlineRate != null) { m.offlineRate = Math.max(m.offlineRate || 0, e.offlineRate); }
+      m.nightPlusMs += e.nightPlusMs || 0;
     });
     return m;
   }
@@ -113,7 +140,10 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
   const costGrowthOf = (item, m = mods()) => m.costGrowth[item.id] || data.costGrowth;
   const cost = (item) => Math.ceil(item.base * Math.pow(costGrowthOf(item), ownedOf(item.id)));
 
-  const isUnlocked = (item) => ownedOf(item.id) > 0 || state.run.earned >= item.base * data.unlockRatio;
+  // 思い出ショップで解放済みか（meta 指定のない品物は最初から）
+  const isAvailable = (item) => !item.meta || metaLevel(item.meta) > 0;
+  // ショップに見えるか（解放済みで、この冬にある程度ハートを集めたら）
+  const isUnlocked = (item) => isAvailable(item) && (ownedOf(item.id) > 0 || state.run.earned >= item.base * data.unlockRatio);
 
   // ---- 強化 ----
   const hasUpgrade = (id) => !!state.upgrades[id];
@@ -131,7 +161,7 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     data.upgrades.filter((u) => !hasUpgrade(u.id) && reqMet(u.req)).sort((a, b) => a.cost - b.cost);
 
   function buyUpgrade(u) {
-    if (hasUpgrade(u.id) || !reqMet(u.req) || state.count < u.cost) { return false; }
+    if (!canShop() || hasUpgrade(u.id) || !reqMet(u.req) || state.count < u.cost) { return false; }
     state.count -= u.cost;
     state.upgrades[u.id] = true;
     return true;
@@ -146,7 +176,6 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     boughtUpgrades().reduce((p, u) => p + (u.effect.clickPctOfPerSec || 0), 0) + m.clickPctOfPerSec;
   const goldenWaitMult = () => boughtUpgrades().reduce((x, u) => x * (u.effect.goldenWait || 1), 1) * mods().goldenWait;
   const buffMs = () => data.golden.buffMs + boughtUpgrades().reduce((s, u) => s + (u.effect.buffPlusMs || 0), 0);
-  const offlineRate = () => mods().offlineRate ?? data.offline.rate;
 
   // 品物1個あたりの効果（強化・カード込み、全体倍率は含まない）
   const itemClick = (it) => (it.click || 0) * itemMult(it.id);
@@ -179,8 +208,95 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     state.run.earned += n;
   }
 
-  // なでる。増えたハート数を返す（drag: 体の上をドラッグしてなでた）
+  // ---- 夜と作戦タイム ----
+  const isNight = () => state.run.phase === 'night';
+  const isOver = () => state.run.phase === 'over' || state.run.phase === 'clear';
+  const canShop = () => state.run.phase === 'night' || state.run.phase === 'break';
+  const nightInfo = (n = state.run.night) => W.nights[Math.min(n, W.nights.length) - 1];
+  const nightCount = () => W.nights.length;
+  const quota = (n = state.run.night) => nightInfo(n).quota;
+  const nightMs = (n = state.run.night) => nightInfo(n).ms + 5000 * metaLevel('longnight') + mods().nightPlusMs;
+
+  // 作戦タイムから夜を始める（おやつを選び終わっていないと始められない）
+  function startNight() {
+    if (state.run.phase !== 'break' || state.run.pending > 0) { return false; }
+    state.run.phase = 'night';
+    state.run.timeLeft = nightMs();
+    return true;
+  }
+
+  // 時間を進める（夜のあいだだけ）。起きたことの配列を返す
+  //   { type: 'nightEnd', ok, night, paid } … 夜が終わってノルマを払えたか
+  //   { type: 'gameEnd', result }           … 冬が終わった（負け / クリア）
+  function update(ms) {
+    const events = [];
+    if (!isNight()) { return events; }
+    const step = Math.min(ms, state.run.timeLeft);
+    tick(step);
+    state.run.timeLeft -= step;
+    state.run.playMs += step;
+    if (state.run.timeLeft <= 0) { events.push(...endNight()); }
+    return events;
+  }
+
+  // ノルマに届いていれば、残り時間を待たずに夜をおえる（起きたことの配列を返す。届いていなければ空）
+  const canEndEarly = () => isNight() && state.count >= quota();
+  function endNightEarly() {
+    if (!canEndEarly()) { return []; }
+    return endNight();
+  }
+
+  function endNight() {
+    const n = state.run.night;
+    const q = quota(n);
+    state.run.timeLeft = 0;
+    state.buffUntil = 0;
+    if (state.count < q) {
+      state.run.phase = 'over';
+      return [{ type: 'nightEnd', ok: false, night: n, paid: 0 }, { type: 'gameEnd', result: finish(false, n - 1) }];
+    }
+    state.count -= q;
+    if (n >= nightCount()) {
+      state.run.phase = 'clear';
+      return [{ type: 'nightEnd', ok: true, night: n, paid: q }, { type: 'gameEnd', result: finish(true, n) }];
+    }
+    state.run.night = n + 1;
+    state.run.phase = 'break';
+    state.run.pending += 1;
+    return [{ type: 'nightEnd', ok: true, night: n, paid: q }];
+  }
+
+  // 冬が終わった。思い出と記録をつける
+  function finish(win, nights) {
+    const memories = nights * W.memoriesPerNight + (win ? W.clearBonus : 0);
+    const result = { win, nights, memories, earned: state.run.earned, ms: state.run.playMs, cards: state.run.cards.slice() };
+    meta.memories += memories;
+    meta.games += 1;
+    if (win) { meta.clears += 1; }
+    meta.bestNights = Math.max(meta.bestNights, nights);
+    meta.best.earned = Math.max(meta.best.earned, result.earned);
+    meta.best.perSec = Math.max(meta.best.perSec, basePerSec());
+    meta.history = [result, ...meta.history].slice(0, 10);
+    state.run.result = result;
+    return result;
+  }
+
+  // 新しい冬を始める（終わったあとに呼ぶ）
+  function newGame() {
+    freshRun();
+  }
+
+  // この冬をあきらめる（越えた夜の分の思い出はもらえる）
+  function giveUp() {
+    if (isOver()) { return null; }
+    state.run.phase = 'over';
+    state.buffUntil = 0;
+    return finish(false, state.run.night - 1);
+  }
+
+  // なでる。増えたハート数を返す（夜じゃないときは 0。drag: 体の上をドラッグしてなでた）
   function pet({ drag = false } = {}) {
+    if (!isNight()) { return 0; }
     const gain = Math.floor(clickPower() * (drag ? mods().dragMult : 1));
     earn(gain);
     stats.taps += 1;
@@ -192,6 +308,7 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
 
   // 買う。買えたら true
   function buy(item) {
+    if (!canShop() || !isAvailable(item)) { return false; }
     const c = cost(item);
     if (state.count < c) { return false; }
     state.count -= c;
@@ -227,31 +344,9 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     return { type: 'instant', amount };
   }
 
-  // 閉じていた間のハートを計算して加える。もらった量を返す（短すぎる不在は 0）
-  function applyOffline(awayMs) {
-    const o = data.offline;
-    if (!(awayMs >= o.minSec * 1000)) { return { amount: 0, ms: 0 }; }
-    const ms = Math.min(awayMs, o.maxHours * 3600 * 1000);
-    const amount = Math.floor(basePerSec() * (ms / 1000) * offlineRate());
-    if (amount > 0) { earn(amount); }
-    return { amount, ms };
-  }
-
   // ---- おやつカード（ドラフト） ----
-  const choiceCount = () => data.move.baseChoices + (metaLevel('choice') ? 1 : 0);
-  const rerollsLeft = () => data.move.baseRerolls + metaLevel('reroll') - state.run.rerollsUsed;
-
-  // しきい値を越えた分だけ、選べるおやつを増やす。増えた数を返す
-  function checkDrafts() {
-    let added = 0;
-    const th = data.draftThresholds;
-    while (state.run.draftIdx < th.length && state.run.earned >= th[state.run.draftIdx]) {
-      state.run.draftIdx += 1;
-      state.run.pending += 1;
-      added += 1;
-    }
-    return added;
-  }
+  const choiceCount = () => W.baseChoices + (metaLevel('choice') ? 1 : 0);
+  const rerollsLeft = () => W.baseRerolls + metaLevel('reroll') - state.run.rerollsUsed;
 
   // まだ持っていないカードから、レア度の重みつきで重複なく選ぶ
   function rollOffer() {
@@ -292,38 +387,6 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
     return true;
   }
 
-  // ---- お引っ越し ----
-  const memoriesFor = (earned) => Math.floor(data.move.memoryScale * Math.cbrt(Math.max(0, earned) / 1e6));
-  const canMove = () => state.run.earned >= data.move.minEarned;
-
-  function moveHouse() {
-    if (!canMove()) { return null; }
-    const gained = memoriesFor(state.run.earned);
-    const record = {
-      earned: state.run.earned,
-      ms: now() - state.run.startedAt,
-      memories: gained,
-      perSec: basePerSec(),
-      cards: state.run.cards.slice()
-    };
-    meta.memories += gained;
-    meta.runs += 1;
-    meta.best.earned = Math.max(meta.best.earned, record.earned);
-    meta.best.perSec = Math.max(meta.best.perSec, record.perSec);
-    meta.history = [record, ...meta.history].slice(0, 10);
-
-    // この周のものをリセットして、思い出ショップの効果で新しい周を始める
-    state.count = 0;
-    state.owned = {};
-    state.upgrades = {};
-    state.frac = 0;
-    state.buffUntil = 0;
-    state.run = newRun();
-    if (metaLevel('starter')) { state.owned = { hay: 5, carrot: 3 }; }
-    if (metaLevel('early')) { state.run.pending = 1; }
-    return record;
-  }
-
   // 新しく解除された実績の配列を返す
   function checkAchievements() {
     const got = data.achievements.filter((a) => !stats.ach[a.id] && a.check(api));
@@ -336,13 +399,13 @@ export function createGame(data, { now = Date.now, random = Math.random } = {}) 
   const api = {
     state, stats, meta, init,
     get run() { return state.run; },
-    ownedOf, cost, isUnlocked,
-    baseClick, basePerSec, clickPower, perSec, mult, buffMult, buffLeft, buffMs, offlineRate,
+    ownedOf, cost, isAvailable, isUnlocked,
+    baseClick, basePerSec, clickPower, perSec, mult, buffMult, buffLeft, buffMs,
     itemClick, itemPerSec, itemMult, mods, globalMult,
     hasUpgrade, upgradeCount, availableUpgrades, buyUpgrade, goldenWaitMult,
-    pet, shouldSpeak, buy, tick, claimGolden, applyOffline,
-    checkDrafts, getOffer, pickCard, reroll, rerollsLeft, ownedCards,
-    memoriesFor, canMove, moveHouse,
+    pet, shouldSpeak, buy, tick, claimGolden,
+    isNight, isOver, canShop, nightCount, quota, nightMs, startNight, update, newGame, giveUp, canEndEarly, endNightEarly,
+    getOffer, pickCard, reroll, rerollsLeft, ownedCards,
     metaLevel, metaCost, buyMeta,
     checkAchievements, achievementCount
   };

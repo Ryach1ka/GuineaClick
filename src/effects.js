@@ -131,6 +131,21 @@ export function confetti(rect, { count = 36 } = {}) {
   }
 }
 
+// 白い息（口元から左上へふわっと広がって消える）。size は 0〜1
+export function puff(p, size = 0.5) {
+  if (reduced() || !Element.prototype.animate) { return; }
+  const s = document.createElement('span');
+  s.className = 'fx-puff';
+  getLayer().appendChild(s);
+  const sc = 0.8 + size * 1.6;
+  const base = `translate(${p.x}px, ${p.y}px) translate(-50%,-50%)`;
+  s.animate([
+    { transform: base + ' scale(.3)', opacity: 0 },
+    { transform: base + ` translate(-10px,-4px) scale(${sc * 0.7})`, opacity: 0.9, offset: 0.25 },
+    { transform: base + ` translate(-34px,-22px) scale(${sc * 1.4})`, opacity: 0 }
+  ], { duration: 1300, easing: 'ease-out' }).onfinish = () => s.remove();
+}
+
 // 要素の近くに小さな文字をふわっと出す（「−♥31」「+1/秒」など）
 export function floatLabel(text, p, cls = '') {
   const s = document.createElement('span');

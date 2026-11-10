@@ -1,38 +1,124 @@
 import { describe, it, expect } from 'vitest';
 import { data } from '../src/data.js';
 import { createGame } from '../src/game.js';
+import { simulate } from './sim.js';
 
-const card = (id) => data.cards.find((c) => c.id === id);
 const meta = (id) => data.metaUnlocks.find((u) => u.id === id);
-
-// 乱数を順番に返す（足りなくなったら最後の値を使い続ける）
-function seq(values) {
-  let i = 0;
-  return () => values[Math.min(i++, values.length - 1)];
-}
+const N = data.winter.nights;
 
 function setup({ count = 0, owned = {}, run = null, meta: m = null, rand = () => 0.5, time = 1000 } = {}) {
   const clock = { t: time };
   const g = createGame(data, { now: () => clock.t, random: rand });
-  g.init({ count, owned: { ...owned }, stats: { earned: 0 }, run, meta: m });
+  // run に phase がないと「前のバージョンのセーブ」扱いでリセットされるので、作戦タイムを補う
+  g.init({ count, owned: { ...owned }, stats: { earned: 0 }, run: { phase: 'break', ...(run || {}) }, meta: m });
   return { g, clock };
 }
 
 // テスト用に、選択肢を経由せずカードを持たせる
 const give = (g, ...ids) => { g.state.run.cards.push(...ids); };
 
-describe('おやつカードのドラフト', () => {
-  it('この周のハートがしきい値を越えるたびに選べる数が増える', () => {
+describe('夜と作戦タイム', () => {
+  it('新しい冬は1夜目の前の作戦タイムから始まる', () => {
     const { g } = setup();
-    expect(g.checkDrafts()).toBe(0);
-    g.state.run.earned = 1500;
-    expect(g.checkDrafts()).toBe(2); // 100 と 1000
-    expect(g.run.pending).toBe(2);
-    expect(g.checkDrafts()).toBe(0);
+    expect(g.run.phase).toBe('break');
+    expect(g.run.night).toBe(1);
+    expect(g.isNight()).toBe(false);
   });
 
+  it('夜を始めると制限時間がはじまり、作戦タイムでは時間が進まない', () => {
+    const { g } = setup({ owned: { carrot: 10 } });
+    expect(g.update(5000)).toEqual([]);
+    expect(g.state.count).toBe(0);
+    expect(g.startNight()).toBe(true);
+    expect(g.run.timeLeft).toBe(N[0].ms);
+    g.update(1000);
+    expect(g.run.timeLeft).toBe(N[0].ms - 1000);
+    expect(g.state.count).toBe(10);
+  });
+
+  it('ノルマを払えたら次の夜の前の作戦タイムになり、おやつが1枚えらべる', () => {
+    const { g } = setup();
+    g.startNight();
+    g.state.count = N[0].quota + 5;
+    const ev = g.update(N[0].ms);
+    expect(ev).toEqual([{ type: 'nightEnd', ok: true, night: 1, paid: N[0].quota }]);
+    expect(g.state.count).toBe(5);
+    expect(g.run.phase).toBe('break');
+    expect(g.run.night).toBe(2);
+    expect(g.run.pending).toBe(1);
+  });
+
+  it('ノルマに届いたら、残り時間を待たずに夜をおえられる', () => {
+    const { g } = setup();
+    g.startNight();
+    g.state.count = N[0].quota - 1;
+    expect(g.canEndEarly()).toBe(false);
+    expect(g.endNightEarly()).toEqual([]);
+    expect(g.run.phase).toBe('night');
+    g.state.count = N[0].quota + 3;
+    expect(g.canEndEarly()).toBe(true);
+    expect(g.endNightEarly()[0]).toMatchObject({ type: 'nightEnd', ok: true, night: 1 });
+    expect(g.state.count).toBe(3);
+    expect(g.run.phase).toBe('break');
+    expect(g.run.pending).toBe(1);
+  });
+
+  it('作戦タイムでは「夜をおえる」は使えない', () => {
+    const { g } = setup({ count: 9999 });
+    expect(g.canEndEarly()).toBe(false);
+    expect(g.endNightEarly()).toEqual([]);
+  });
+
+  it('おやつを選ぶまで次の夜は始められない', () => {
+    const { g } = setup({ run: { phase: 'break', night: 2, pending: 1 } });
+    expect(g.startNight()).toBe(false);
+    g.pickCard(g.getOffer()[0].id);
+    expect(g.startNight()).toBe(true);
+  });
+
+  it('ノルマに足りなければ負けて、越えた夜の数だけ思い出がもらえる', () => {
+    const { g } = setup({ run: { phase: 'night', night: 3, timeLeft: 1000 } });
+    g.state.count = N[2].quota - 1;
+    const ev = g.update(2000);
+    expect(ev[0]).toMatchObject({ type: 'nightEnd', ok: false, night: 3 });
+    expect(ev[1].result).toMatchObject({ win: false, nights: 2, memories: 2 });
+    expect(g.run.phase).toBe('over');
+    expect(g.meta.memories).toBe(2);
+    expect(g.meta.games).toBe(1);
+    expect(g.meta.bestNights).toBe(2);
+  });
+
+  it('最後の夜を越えるとクリアで、おまけの思い出がもらえる', () => {
+    const last = N.length;
+    const { g } = setup({ run: { phase: 'night', night: last, timeLeft: 10 } });
+    g.state.count = N[last - 1].quota;
+    const ev = g.update(100);
+    expect(ev[1].result).toMatchObject({ win: true, nights: last, memories: last + data.winter.clearBonus });
+    expect(g.run.phase).toBe('clear');
+    expect(g.meta.clears).toBe(1);
+  });
+
+  it('新しい冬を始めると今の冬のものはリセット、思い出は残る', () => {
+    const { g } = setup({ count: 999, owned: { hay: 3 }, run: { phase: 'over', cards: ['glutton'] }, meta: { memories: 7 } });
+    g.newGame();
+    expect(g.state.count).toBe(0);
+    expect(g.state.owned).toEqual({});
+    expect(g.run.cards).toEqual([]);
+    expect(g.run.phase).toBe('break');
+    expect(g.meta.memories).toBe(7);
+  });
+
+  it('長い夜・夜ふかしで夜がのびる', () => {
+    const { g } = setup({ meta: { unlocks: { longnight: 2 } } });
+    expect(g.nightMs(1)).toBe(N[0].ms + 10000);
+    give(g, 'nightowl');
+    expect(g.nightMs(1)).toBe(N[0].ms + 15000);
+  });
+});
+
+describe('おやつカードのドラフト', () => {
   it('選択肢は重複なく3枚、持っているカードは出ない', () => {
-    const { g } = setup({ run: { pending: 1 }, rand: Math.random });
+    const { g } = setup({ run: { phase: 'break', pending: 1 }, rand: Math.random });
     give(g, 'glutton', 'hayfan');
     const offer = g.getOffer();
     expect(offer).toHaveLength(3);
@@ -41,22 +127,13 @@ describe('おやつカードのドラフト', () => {
   });
 
   it('選択肢はリロードしても変わらない（保存された offer を使う）', () => {
-    const { g } = setup({ run: { pending: 1 }, rand: Math.random });
+    const { g } = setup({ run: { phase: 'break', pending: 1 }, rand: Math.random });
     const a = g.getOffer().map((c) => c.id);
     expect(g.getOffer().map((c) => c.id)).toEqual(a);
   });
 
-  it('選んだカードが手に入り、選べる数が減る', () => {
-    const { g } = setup({ run: { pending: 2 } });
-    const [first] = g.getOffer();
-    expect(g.pickCard(first.id)).toBe(true);
-    expect(g.run.cards).toEqual([first.id]);
-    expect(g.run.pending).toBe(1);
-    expect(g.pickCard('not-offered')).toBe(false);
-  });
-
   it('引き直しは思い出ショップで買った回数だけ', () => {
-    const { g } = setup({ run: { pending: 1 } });
+    const { g } = setup({ run: { phase: 'break', pending: 1 } });
     expect(g.reroll()).toBe(false);
     g.meta.unlocks.reroll = 1;
     expect(g.reroll()).toBe(true);
@@ -64,24 +141,25 @@ describe('おやつカードのドラフト', () => {
   });
 
   it('よくばりを買うと選択肢が4枚', () => {
-    const { g } = setup({ run: { pending: 1 }, meta: { unlocks: { choice: 1 } }, rand: Math.random });
+    const { g } = setup({ run: { phase: 'break', pending: 1 }, meta: { unlocks: { choice: 1 } }, rand: Math.random });
     expect(g.getOffer()).toHaveLength(4);
   });
 });
 
 describe('カードの効果', () => {
+  const night = { phase: 'night', night: 1, timeLeft: 60000 };
+
   it('タグ指定：食いしん坊でたべもの系 ×1.5', () => {
     const { g } = setup({ owned: { carrot: 10, friend: 1 } });
     give(g, 'glutton');
-    expect(g.basePerSec()).toBeCloseTo(10 * 1.5 + 6);
+    expect(g.basePerSec()).toBeCloseTo(10 * 1.5 + 3);
   });
 
   it('タグの枚数ボーナス：同じタグを重ねるほど全体が伸びる（シナジー）', () => {
     const { g } = setup({ owned: { carrot: 10 } });
     give(g, 'gourmet');
-    expect(g.basePerSec()).toBeCloseTo(10 * 1.15);          // グルメ自身で1枚
+    expect(g.basePerSec()).toBeCloseTo(10 * 1.15);
     give(g, 'hayfan', 'carrotcult');
-    // 🥕カード3枚 → +45%、にんじん教でにんじん10個 → +5%
     expect(g.basePerSec()).toBeCloseTo(10 * 1.05 * 1.45);
   });
 
@@ -93,14 +171,15 @@ describe('カードの効果', () => {
   });
 
   it('子だくさん：なかまの値上がり率が下がる', () => {
-    const { g } = setup({ owned: { friend: 10 } });
-    const before = g.cost(data.items.find((i) => i.id === 'friend'));
+    const { g } = setup({ owned: { friend: 5 } });
+    const friend = data.items.find((i) => i.id === 'friend');
+    const before = g.cost(friend);
     give(g, 'bigfamily');
-    expect(g.cost(data.items.find((i) => i.id === 'friend'))).toBeLessThan(before);
+    expect(g.cost(friend)).toBeLessThan(before);
   });
 
   it('ブラッシング職人：ドラッグでなでたときだけ ×3', () => {
-    const { g } = setup({ owned: { hay: 9 } });
+    const { g } = setup({ owned: { hay: 9 }, run: night });
     give(g, 'brushpro');
     expect(g.pet()).toBe(10);
     expect(g.pet({ drag: true })).toBe(30);
@@ -120,15 +199,9 @@ describe('カードの効果', () => {
     expect(g.mult()).toBe(data.golden.buffMult + 3);
   });
 
-  it('おるすばん上手：オフライン報酬が100%', () => {
-    const { g } = setup({ owned: { carrot: 10 } });
-    give(g, 'housesit');
-    expect(g.applyOffline(3600 * 1000).amount).toBe(36000);
-  });
-
   it('全カードの効果キーは game.js が知っているものだけ', () => {
     const known = ['tagMult', 'itemMult', 'perItemPerSec', 'tagCountGlobal', 'clickPerFriend', 'costGrowth',
-      'dragMult', 'clickMult', 'perSecMult', 'clickPctOfPerSec', 'goldenWait', 'instantMult', 'buffMultPlus', 'offlineRate'];
+      'dragMult', 'clickMult', 'perSecMult', 'clickPctOfPerSec', 'goldenWait', 'instantMult', 'buffMultPlus', 'nightPlusMs'];
     data.cards.forEach((c) => Object.keys(c.effect).forEach((k) => expect(known).toContain(k)));
     data.cards.forEach((c) => c.tags.forEach((t) => expect(data.tagInfo[t]).toBeTruthy()));
   });
@@ -139,57 +212,14 @@ describe('カードの効果', () => {
   });
 });
 
-describe('お引っ越し', () => {
-  it('この周で100万集めるまではお引っ越しできない', () => {
-    const { g } = setup();
-    g.state.run.earned = 999999;
-    expect(g.canMove()).toBe(false);
-    expect(g.moveHouse()).toBe(null);
-  });
-
-  it('思い出は集めたハートの立方根に比例', () => {
-    const { g } = setup();
-    expect(g.memoriesFor(1e6)).toBe(10);
-    expect(g.memoriesFor(8e6)).toBe(20);
-    expect(g.memoriesFor(1e9)).toBe(100);
-  });
-
-  it('お引っ越しで周回のものがリセットされ、思い出と記録が残る', () => {
-    const { g, clock } = setup({ count: 5000, owned: { hay: 10 } });
-    g.state.upgrades.hay1 = true;
-    give(g, 'glutton');
-    g.state.run.earned = 8e6;
-    clock.t += 60000;
-    const r = g.moveHouse();
-    expect(r.memories).toBe(20);
-    expect(r.ms).toBe(60000);
-    expect(r.cards).toEqual(['glutton']);
-    expect(g.meta.memories).toBe(20);
-    expect(g.meta.runs).toBe(1);
-    expect(g.meta.history[0].earned).toBe(8e6);
-    expect(g.state.count).toBe(0);
-    expect(g.state.owned).toEqual({});
-    expect(g.state.upgrades).toEqual({});
-    expect(g.run.cards).toEqual([]);
-    expect(g.run.earned).toBe(0);
-  });
-
-  it('引っ越し祝い・おやつの前借りが次の周に効く', () => {
-    const { g } = setup({ meta: { unlocks: { starter: 1, early: 1 } } });
-    g.state.run.earned = 1e6;
-    g.moveHouse();
-    expect(g.state.owned).toEqual({ hay: 5, carrot: 3 });
-    expect(g.run.pending).toBe(1);
-  });
-});
-
 describe('思い出ショップ', () => {
   it('思い出が足りれば買えて、レベルが上がる', () => {
-    const { g } = setup({ meta: { memories: 30 } });
-    expect(g.buyMeta(meta('reroll'))).toBe(true);   // 15
+    const r = meta('reroll');
+    const { g } = setup({ meta: { memories: r.cost[0] + 1 } });
+    expect(g.buyMeta(r)).toBe(true);
     expect(g.metaLevel('reroll')).toBe(1);
-    expect(g.metaCost(meta('reroll'))).toBe(45);
-    expect(g.buyMeta(meta('reroll'))).toBe(false);  // 残り15 < 45
+    expect(g.metaCost(r)).toBe(r.cost[1]);
+    expect(g.buyMeta(r)).toBe(false);
   });
 
   it('1回きりのものは2回買えない', () => {
@@ -199,6 +229,13 @@ describe('思い出ショップ', () => {
     expect(g.buyMeta(meta('starter'))).toBe(false);
   });
 
+  it('おすそわけ・おやつの前借りが次の冬に効く', () => {
+    const { g } = setup({ meta: { unlocks: { starter: 1, early: 1 } } });
+    g.newGame();
+    expect(g.state.owned).toEqual({ hay: 2 });
+    expect(g.run.pending).toBe(1);
+  });
+
   it('思い出の力：1レベルごとに全体 +10%', () => {
     const { g } = setup({ owned: { carrot: 10 }, meta: { unlocks: { boost: 2 } } });
     expect(g.basePerSec()).toBeCloseTo(12);
@@ -206,10 +243,36 @@ describe('思い出ショップ', () => {
 });
 
 describe('前のバージョンからの引き継ぎ', () => {
-  it('周回データがないセーブは、今までの累計をこの周の分として続ける', () => {
+  it('冬ごもりより前のセーブは、新しい冬から始める（思い出は残す）', () => {
     const g = createGame(data);
-    g.init({ count: 10, owned: {}, stats: { earned: 2e6 } });
-    expect(g.run.earned).toBe(2e6);
-    expect(g.canMove()).toBe(true);
+    g.init({ count: 3e6, owned: { hay: 40 }, stats: { earned: 3e6 }, run: { cards: ['glutton'], earned: 3e6 }, meta: { memories: 24 } });
+    expect(g.state.count).toBe(0);
+    expect(g.state.owned).toEqual({});
+    expect(g.run.phase).toBe('break');
+    expect(g.meta.memories).toBe(24);
+    expect(g.stats.earned).toBe(3e6);
+  });
+});
+
+// ---- バランス：ボットに遊ばせて、狙いどおりの難しさになっているかを見る ----
+describe('バランス（ボットで12回ずつ遊ぶ）', () => {
+  const avg = (opt) => {
+    const rs = Array.from({ length: 12 }, (_, i) => simulate(data, { ...opt, seed: i + 1 }));
+    return { nights: rs.reduce((a, r) => a + r.nights, 0) / rs.length, wins: rs.filter((r) => r.win).length };
+  };
+
+  it('なでるだけ（買い物しない）だと2夜目くらいで負ける', () => {
+    expect(avg({ tapRate: 3, buy: false }).nights).toBeLessThanOrEqual(2.5);
+  });
+
+  it('最初の冬（思い出なし）は、うまく買い物しても3〜4夜目で力尽きる', () => {
+    const r = avg({ tapRate: 3 });
+    expect(r.nights).toBeGreaterThanOrEqual(2.5);
+    expect(r.wins).toBeLessThanOrEqual(2);
+  });
+
+  it('思い出ショップをある程度そろえると、冬を越えられるようになる', () => {
+    const r = avg({ tapRate: 3, meta: { item_house: 1, item_brush: 1, longnight: 2, boost: 2, starter: 1, early: 1 } });
+    expect(r.wins).toBeGreaterThanOrEqual(8);
   });
 });

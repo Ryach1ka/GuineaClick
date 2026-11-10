@@ -26,11 +26,23 @@
     </div>
   </div>
   <div class="group">
-    <button id="giftBtn" type="button" class="gift" hidden>🎁 <span id="giftCount">1</span></button>
-    <button id="moveBtn" type="button" aria-label="お引っ越しと思い出">🏡</button>
+    <button id="pauseBtn" type="button" aria-label="一時停止">⏸</button>
+    <button id="homeBtn" type="button" aria-label="思い出ショップと記録">🏡</button>
     <button id="achBtn" type="button">🏆 0/0</button>
   </div>
 </div>
+
+<!-- 寒波のメーター：何夜目・ノルマ・残り時間 -->
+<div class="winter" id="winter">
+  <div class="w-row">
+    <span class="w-night" id="nightLabel">🌙 1夜目</span>
+    <span class="w-quota" id="quotaLabel">❄️ ノルマ ♥40</span>
+    <span class="w-time" id="timeLabel">1:00</span>
+  </div>
+  <div class="w-bar" aria-hidden="true"><div class="w-fill" id="quotaFill"></div><div class="w-time-fill" id="timeFill"></div></div>
+  <button id="clearBtn" type="button" class="clear-btn" hidden>✅ ノルマ達成！ 夜をおえる ▶</button>
+</div>
+
 <div class="score">
   <div class="n" id="count">0</div>
   <div class="l">ハート <span id="rate"></span></div>
@@ -39,7 +51,18 @@
   <div class="ground"></div>
   <div id="decor"></div>
   <div id="herd"></div>
+  <div class="frost" id="frost" aria-hidden="true"></div>
+  <div class="snow" id="snow" aria-hidden="true"></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="banner" id="banner" aria-live="assertive"></div>
+  <!-- 作戦タイム：夜と夜のあいだ（時間は止まっている） -->
+  <div class="breakbar" id="breakBar" hidden>
+    <div class="bb-text"><b id="breakTitle">☀️ 作戦タイム</b><small id="breakSub"></small></div>
+    <div class="bb-btns">
+      <button id="giftBtn" type="button" class="gift" hidden>🎁 <span id="giftCount">1</span></button>
+      <button id="nightBtn" type="button" class="primary">🌙 1夜目へ</button>
+    </div>
+  </div>
   <button id="pig" aria-label="モルモットをなでる">
     <span class="bubble" id="bubble">プイプイ</span>
     <svg id="pigSvg" viewBox="0 0 340 260" aria-hidden="true">
@@ -100,8 +123,13 @@
               <use class="patch" href="#pigPatch"/>
               <ellipse cx="185" cy="246" rx="190" ry="60" fill="url(#pigGroundShade)" opacity=".7"/>
               <g class="fur-strokes" stroke-linecap="round" fill="none"></g>
+              <!-- 寒さで毛が青白くなる（濃さは --cold で変わる） -->
+              <use class="ice" href="#pigBodyPath" fill="#cfe9ff"/>
             </g>
           </g>
+
+          <!-- 背中に積もる雪（寒くなるほど見えてくる） -->
+          <path class="snowcap" d="M138 86 Q168 64 206 66 Q248 68 274 92 Q256 86 240 92 Q222 84 204 92 Q186 84 168 92 Q152 86 138 86 Z" fill="#ffffff" stroke="#d6ecff" stroke-width="2"/>
 
           <!-- 耳：薄い花びら型で少し垂れている -->
           <g class="ear">
@@ -155,39 +183,51 @@
 
 <div class="overlay" id="draftPanel" role="dialog" aria-modal="true" aria-labelledby="draftTitle">
   <div class="card draft-card">
-    <h2 id="draftTitle">🎁 おやつカードをえらぼう</h2>
+    <h2 id="draftTitle">🎁 夜を越えたごほうび！おやつをえらぼう</h2>
     <p class="draft-sub" id="draftSub"></p>
     <div class="draft-list" id="draftList"></div>
     <div class="draft-foot">
       <button id="rerollBtn" type="button" class="secondary">🔄 ひきなおす</button>
-      <button id="draftLater" type="button" class="secondary">あとで</button>
     </div>
   </div>
 </div>
 
-<div class="overlay" id="movePanel" role="dialog" aria-modal="true" aria-labelledby="moveTitle">
+<!-- 🏡 おうち：思い出ショップと記録 -->
+<div class="overlay" id="homePanel" role="dialog" aria-modal="true" aria-labelledby="homeTitle">
   <div class="card move-card">
-    <h2><span id="moveTitle">🏡 お引っ越し</span><button id="moveClose" type="button" aria-label="閉じる">✕</button></h2>
-    <section class="run-sum" id="runSum"></section>
-    <button id="moveGo" type="button" class="primary wide">お引っ越しする</button>
-    <p class="hint-text" id="moveHint"></p>
+    <h2><span id="homeTitle">🏡 おうち</span><button id="homeClose" type="button" aria-label="閉じる">✕</button></h2>
     <h3>今回のおやつ</h3>
     <ul class="mycards" id="myCards"></ul>
     <h3>思い出ショップ <span class="mem" id="memBalance"></span></h3>
     <ul class="metashop" id="metaShop"></ul>
     <h3>記録</h3>
     <div class="records" id="records"></div>
+    <button id="giveUp" type="button" class="secondary wide">この冬をあきらめる</button>
   </div>
 </div>
 
-<div class="overlay" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
-  <div class="card welcome-card">
-    <div class="welcome-pig" aria-hidden="true">🐹💤</div>
-    <h2 id="welcomeTitle">おかえり！</h2>
-    <p><span id="welcomeTime"></span>のおるすばん中に<br>みんなでハートをあつめたよ</p>
-    <p class="welcome-amount" id="welcomeAmount"></p>
-    <button id="welcomeOk" type="button" class="primary">うけとる</button>
+<!-- 冬が終わったとき（負け / クリア） -->
+<div class="overlay" id="endPanel" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="card end-card">
+    <div class="end-icon" id="endIcon" aria-hidden="true">🥶</div>
+    <h2 id="endTitle">寒さに負けちゃった…</h2>
+    <p class="end-sub" id="endSub"></p>
+    <div class="run-sum" id="endSum"></div>
+    <p class="end-mem" id="endMem"></p>
+    <div class="end-btns">
+      <button id="endHome" type="button" class="secondary">🏡 思い出ショップ</button>
+      <button id="endRetry" type="button" class="primary">もう一度ふゆごもり</button>
+    </div>
   </div>
+</div>
+
+<!-- ⏸ ひとやすみ -->
+<div class="overlay pause" id="pausePanel" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+  <button class="pause-card" id="pauseResume" type="button">
+    <span class="pause-icon" aria-hidden="true">⏸</span>
+    <b id="pauseTitle">ひとやすみ中</b>
+    <small>タップでつづける</small>
+  </button>
 </div>
 
 <script type="module" src="/src/main.js"></script>

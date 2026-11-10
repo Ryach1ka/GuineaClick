@@ -47,7 +47,7 @@ body.fever{background:var(--fever-bg)}
 @keyframes giftBob{50%{transform:translateY(-3px)}}
 @keyframes giftRing{0%,100%{transform:rotate(0)} 25%{transform:rotate(-14deg) scale(1.1)} 75%{transform:rotate(14deg) scale(1.1)}}
 
-.score{margin-top:max(6vh,3.2rem); text-align:center}
+.score{margin-top:.6rem; text-align:center}
 .score .n{font-size:clamp(3rem,16vw,5.5rem); font-weight:700; line-height:1; color:var(--heart); font-variant-numeric:tabular-nums}
 .score .n.bump{animation:bump .3s ease-out}
 @keyframes bump{40%{transform:scale(1.12)}}
@@ -111,12 +111,75 @@ body.fever .score .n{color:var(--gold)}
 .upg .ud{grid-area:ud; font-size:.75rem; color:var(--muted); margin-top:.15rem}
 .upg .up{grid-area:up; font-weight:700; color:var(--heart); font-variant-numeric:tabular-nums}
 
-/* おかえり（オフライン報酬） */
-.welcome-card{text-align:center; max-width:320px}
-.card.welcome-card h2{display:block; font-size:1.4rem; margin:.2rem 0 .4rem}
-.welcome-card p{margin:.3rem 0; line-height:1.6}
-.welcome-pig{font-size:2.4rem}
-.welcome-amount{font-size:2rem; font-weight:700; color:var(--heart); font-variant-numeric:tabular-nums}
+/* 寒波のメーター */
+.winter{width:min(520px, calc(100% - 32px)); margin-top:3.3rem; background:var(--bubble); border-radius:14px; padding:.45rem .7rem .55rem; box-shadow:0 2px 8px var(--shadow); z-index:3}
+.w-row{display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; font-weight:700; font-size:.88rem}
+.w-night{white-space:nowrap}
+.w-quota{color:#4d8fd6; white-space:nowrap}
+.w-quota.ok{color:#3f9b52}
+.w-time{font-variant-numeric:tabular-nums; font-size:1.05rem; min-width:3.2rem; text-align:right}
+.w-bar{position:relative; height:10px; margin-top:.35rem; background:var(--bg); border-radius:999px; overflow:hidden}
+.w-fill{position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg, #ff9ab0, var(--heart)); border-radius:999px; transition:width .2s}
+.w-fill.ok{background:linear-gradient(90deg, #8fd673, #3f9b52)}
+.w-time-fill{position:absolute; left:0; bottom:0; height:3px; width:100%; background:#8ec5ff; transition:width .1s linear}
+.clear-btn{display:block; width:100%; margin-top:.45rem; font:inherit; font-weight:700; font-size:.95rem; color:#fff; background:linear-gradient(90deg, #5cb85c, #3f9b52); border:0; border-radius:999px; padding:.5rem 1rem; min-height:40px; cursor:pointer; box-shadow:0 3px 10px rgba(63,155,82,.35)}
+.clear-btn:focus-visible{outline:3px solid var(--ink); outline-offset:2px}
+.clear-btn.pop{animation:clearPop .5s cubic-bezier(.3,1.7,.5,1)}
+@keyframes clearPop{from{transform:scale(.6); opacity:0}}
+.winter.hurry{animation:hurry .5s ease-in-out infinite alternate}
+.winter.hurry .w-time{color:#d9534f}
+@keyframes hurry{to{box-shadow:0 0 0 3px #d9534f}}
+body.boss .winter{background:linear-gradient(90deg, var(--bubble), rgba(142,197,255,.35))}
+
+/* 霜と雪（寒くなるほど濃くなる） */
+.frost{position:absolute; inset:0; pointer-events:none; z-index:4; opacity:0; transition:opacity .4s;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(200,230,255,.75) 100%)}
+.snow{position:absolute; inset:0; pointer-events:none; z-index:4; overflow:hidden; opacity:.15; transition:opacity .6s}
+.snow span{position:absolute; top:-1.5rem; color:#fff; text-shadow:0 0 4px rgba(150,200,255,.8); animation:snowfall linear infinite}
+@keyframes snowfall{to{transform:translate(30px, 115vh) rotate(180deg)}}
+body.frozen .stage{animation:shiver .1s linear 10}
+@keyframes shiver{50%{transform:translateX(4px)}}
+body.frozen .frost{opacity:.9 !important}
+
+/* 画面の真ん中の大きなお知らせ */
+.banner{position:absolute; left:50%; top:30%; transform:translate(-50%,-50%) scale(.6); opacity:0; z-index:8; pointer-events:none; text-align:center; background:var(--bubble); border-radius:18px; padding:.7rem 1.4rem; box-shadow:0 8px 24px var(--shadow); white-space:nowrap}
+.banner b{display:block; font-size:1.5rem}
+.banner small{display:block; color:var(--muted); font-size:.85rem; margin-top:.15rem}
+.banner.show{animation:bannerIn 1.7s cubic-bezier(.3,1.5,.5,1) forwards}
+.banner.boss b{color:#4d8fd6}
+.banner.ok b{color:#3f9b52}
+.banner.lose b{color:#4d8fd6}
+@keyframes bannerIn{0%{opacity:0; transform:translate(-50%,-50%) scale(.6)} 15%{opacity:1; transform:translate(-50%,-50%) scale(1.05)} 25%{transform:translate(-50%,-50%) scale(1)} 85%{opacity:1} 100%{opacity:0; transform:translate(-50%,-60%) scale(1)}}
+
+/* 作戦タイムの帯 */
+.breakbar{position:absolute; left:.6rem; right:.6rem; top:.4rem; z-index:7; display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; background:var(--bubble); border-radius:16px; padding:.55rem .7rem; box-shadow:0 6px 18px var(--shadow)}
+.bb-text b{display:block; font-size:.95rem}
+.bb-text small{display:block; color:var(--muted); font-size:.78rem}
+.bb-btns{display:flex; gap:.4rem; align-items:center; margin-left:auto}
+.breakbar .primary{margin-top:0; padding:.55rem 1.2rem; font-size:.95rem}
+.breakbar .gift{font:inherit; font-weight:700; color:#fff; background:var(--heart); border:0; border-radius:999px; padding:.5rem .9rem; min-height:40px; cursor:pointer; animation:giftBob 1.6s ease-in-out infinite}
+
+/* ⏸ ひとやすみ */
+.overlay.pause{backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px)}
+.pause-card{display:flex; flex-direction:column; align-items:center; gap:.3rem; font:inherit; color:var(--ink); background:var(--bubble); border:0; border-radius:20px; padding:1.4rem 2.4rem; cursor:pointer; box-shadow:0 10px 30px var(--shadow)}
+.pause-card:focus-visible{outline:3px solid var(--heart); outline-offset:3px}
+.pause-icon{font-size:2.2rem}
+.pause-card b{font-size:1.2rem}
+.pause-card small{color:var(--muted)}
+
+/* 冬の結果 */
+.card.end-card{max-width:400px; text-align:center}
+.card.end-card h2{display:block; font-size:1.3rem; margin:.2rem 0 .3rem}
+.end-icon{font-size:3rem}
+.end-sub{color:var(--muted); font-size:.85rem; margin:.2rem 0 .7rem}
+.end-mem{font-size:.82rem; color:var(--muted); margin:.4rem 0}
+.end-btns{display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap}
+.end-btns .primary{margin-top:0}
+#homePanel{z-index:31}
+.metashop li.done{opacity:.6}
+.secondary.wide{width:100%; margin-top:1rem}
+.secondary.confirm{background:#d9534f; color:#fff}
+
 .primary{font:inherit; font-weight:700; font-size:1.05rem; color:#fff; background:var(--heart); border:0; border-radius:999px; padding:.65rem 2rem; margin-top:.6rem; min-height:44px; cursor:pointer}
 .primary:focus-visible{outline:3px solid var(--ink); outline-offset:3px}
 
@@ -242,6 +305,26 @@ body.fever #pigSvg .eye-open, body.fever #pigSvg .eye-closed{display:none}
 body.fever #pigSvg .eye-happy{display:inline}
 body.fever #pigSvg .blush{opacity:.8}
 
+/* 寒そうなモルモット（--cold は 0〜1。winterui.js が夜の進み具合で変える） */
+:root{--cold:0; --shiver:0}
+#pigSvg .ice{opacity:calc(var(--cold) * .45); mix-blend-mode:screen}
+#pigSvg .snowcap{opacity:clamp(0, calc(var(--cold) * 1.8 - .35), 1); transform-box:fill-box; transform-origin:50% 100%; transform:scaleY(clamp(.3, calc(var(--cold) * 1.3), 1)); filter:drop-shadow(0 1px 1px rgba(120,170,220,.6))}
+#pigSvg .blush{opacity:calc(.38 + var(--cold) * .45)}
+/* ぶるぶる：寒いほど大きく・ひんぱんに震える */
+body.chilly #pigSvg:not(.petting) .purr{animation:shiverBurst 2.2s infinite}
+body.freezing #pigSvg:not(.petting) .purr{animation:shiver .09s linear infinite}
+body.fever #pigSvg .purr{animation:none}
+@keyframes shiverBurst{
+  0%,22%,100%{transform:translateX(0)}
+  3%,9%,15%{transform:translateX(calc(var(--shiver) * -1px))}
+  6%,12%,18%{transform:translateX(calc(var(--shiver) * 1px))}
+}
+@keyframes shiver{0%,100%{transform:translateX(calc(var(--shiver) * -1px))} 50%{transform:translateX(calc(var(--shiver) * 1px))}}
+/* 寒いと体をきゅっと丸める */
+body.freezing #pigSvg .squash{transform:translateY(3px) scale(1.03,.95)}
+/* 白い息 */
+.fx-puff{position:absolute; left:0; top:0; width:18px; height:14px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); pointer-events:none}
+
 /* ステージの仲間 */
 .mini{position:absolute; width:64px; animation:wander var(--d) ease-in-out infinite; animation-delay:var(--dl)}
 .mini svg{display:block; width:100%; height:auto; transform:scale(var(--s))}
@@ -283,7 +366,9 @@ body.fever #pigSvg .blush{opacity:.8}
 .ach.locked{opacity:.6}
 
 @media (prefers-reduced-motion: reduce){
-  #pigSvg *,.mini,.mini svg,.golden,.toast,.item.bought,.score .n.bump,.decor.pop,.item .cnt.pop,.score .n.levelup,.topbar .gift,.draft-item{animation:none !important}
+  #pigSvg *,.mini,.mini svg,.golden,.toast,.item.bought,.score .n.bump,.decor.pop,.item .cnt.pop,.score .n.levelup,.topbar .gift,.breakbar .gift,.draft-item,.snow span,.winter.hurry,body.frozen .stage,#pigSvg .purr,.clear-btn.pop{animation:none !important}
+  .snow{display:none}
+  .banner.show{animation:none; opacity:1; transform:translate(-50%,-50%)}
   .fx-label{animation-duration:.01s}
   .fly{animation-duration:.01s} #pig{transition:none}
 }

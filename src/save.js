@@ -7,15 +7,14 @@ const KEY_OWNED = 'morumotto:owned';
 const KEY_STATS = 'morumotto:stats';       // なでた回数・累計ハート・実績など
 const KEY_SETTINGS = 'morumotto:settings'; // 音のオン/オフなど
 const KEY_UPGRADES = 'morumotto:upgrades'; // 買った強化
-const KEY_LAST_SEEN = 'morumotto:lastSeen'; // 最後に保存した時刻（オフライン報酬用）
-const KEY_RUN = 'morumotto:run';           // この周回の状態（おやつカードなど）
-const KEY_META = 'morumotto:meta';         // 周回をまたいで残るもの（思い出など）
+const KEY_RUN = 'morumotto:run';           // 今の冬の状態（何夜目・残り時間・おやつカードなど）
+const KEY_META = 'morumotto:meta';         // 何回遊んでも残るもの（思い出など）
 
 function defaultStorage() {
   try { return window.localStorage; } catch (e) { return null; }
 }
 
-export function createStore(storage = defaultStorage(), { now = Date.now } = {}) {
+export function createStore(storage = defaultStorage()) {
   function get(key) {
     try { return storage ? storage.getItem(key) : null; } catch (e) { return null; }
   }
@@ -28,15 +27,13 @@ export function createStore(storage = defaultStorage(), { now = Date.now } = {})
 
   function load() {
     const count = parseInt(get(KEY_COUNT), 10);
-    const lastSeen = parseInt(get(KEY_LAST_SEEN), 10);
     return {
       count: isNaN(count) ? 0 : count,
       owned: readJSON(KEY_OWNED) || {},
       upgrades: readJSON(KEY_UPGRADES) || {},
       stats: readJSON(KEY_STATS),
       run: readJSON(KEY_RUN),
-      meta: readJSON(KEY_META),
-      lastSeen: isNaN(lastSeen) ? null : lastSeen
+      meta: readJSON(KEY_META)
     };
   }
 
@@ -47,7 +44,6 @@ export function createStore(storage = defaultStorage(), { now = Date.now } = {})
     set(KEY_STATS, JSON.stringify(game.stats));
     set(KEY_RUN, JSON.stringify(game.state.run));
     set(KEY_META, JSON.stringify(game.meta));
-    set(KEY_LAST_SEEN, String(now()));
   }
 
   function loadSettings() {

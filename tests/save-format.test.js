@@ -17,14 +17,15 @@ function memoryStorage(initial = {}) {
 describe('セーブ', () => {
   it('空なら 0 から始まる', () => {
     const s = createStore(memoryStorage());
-    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
+    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null });
   });
 
   it('書いたものがそのまま読める', () => {
     const storage = memoryStorage();
     const s = createStore(storage);
     const g = createGame(data);
-    g.init({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
+    g.init({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null });
+    g.startNight();
     g.pet(); g.pet();
     g.state.owned.hay = 3;
     s.write(g);
@@ -40,24 +41,22 @@ describe('セーブ', () => {
       'morumotto:count': '123',
       'morumotto:owned': '{"carrot":4}'
     }));
-    expect(s.load()).toEqual({ count: 123, owned: { carrot: 4 }, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
+    expect(s.load()).toEqual({ count: 123, owned: { carrot: 4 }, upgrades: {}, stats: null, run: null, meta: null });
   });
 
-  it('強化と最後に保存した時刻も保存される', () => {
+  it('強化も保存される', () => {
     const storage = memoryStorage();
-    const s = createStore(storage, { now: () => 1234567 });
+    const s = createStore(storage);
     const g = createGame(data);
     g.init({ count: 0, owned: {}, stats: null });
     g.state.upgrades.hay1 = true;
     s.write(g);
-    const loaded = s.load();
-    expect(loaded.upgrades).toEqual({ hay1: true });
-    expect(loaded.lastSeen).toBe(1234567);
+    expect(s.load().upgrades).toEqual({ hay1: true });
   });
 
   it('壊れたデータでも落ちない', () => {
     const s = createStore(memoryStorage({ 'morumotto:owned': '{壊れてる', 'morumotto:count': 'abc' }));
-    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null, lastSeen: null });
+    expect(s.load()).toEqual({ count: 0, owned: {}, upgrades: {}, stats: null, run: null, meta: null });
   });
 
   it('効果音も BGM も最初はオン、音量は 50%', () => {
@@ -72,16 +71,20 @@ describe('セーブ', () => {
     expect(s.loadSettings()).toEqual({ sound: false, bgm: true, sfxVol: 0.5, bgmVol: 0.5 });
   });
 
-  it('周回の状態と思い出も保存される', () => {
+  it('冬の途中の状態（何夜目・残り時間・カード）と思い出も保存される', () => {
     const storage = memoryStorage();
     const s = createStore(storage);
     const g = createGame(data);
     g.init({ count: 0, owned: {}, stats: null });
+    g.startNight();
+    g.update(10000);
     g.state.run.cards.push('glutton');
     g.meta.memories = 42;
     s.write(g);
     const g2 = createGame(data);
     g2.init(s.load());
+    expect(g2.run.phase).toBe('night');
+    expect(g2.run.timeLeft).toBe(g.run.timeLeft);
     expect(g2.run.cards).toEqual(['glutton']);
     expect(g2.meta.memories).toBe(42);
   });

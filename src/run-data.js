@@ -1,4 +1,4 @@
-// run-data.js — 周回（お引っ越し）まわりのデータ：おやつカード・思い出ショップ・しきい値
+// run-data.js — 冬ごもりまわりのデータ：寒波（夜とノルマ）・おやつカード・思い出ショップ
 
 // 品物のタグ（カードの「◯◯系」の対象）
 export const itemTags = {
@@ -31,7 +31,7 @@ export const tagInfo = {
 //     clickPctOfPerSec: 割合              タップに毎秒の量 × 割合 が加わる
 //     goldenWait / instantMult: 倍率      きんのにんじんの出やすさ / 即ボーナス
 //     buffMultPlus: 数                    ごきげんタイムの倍率に足す
-//     offlineRate: 割合                   オフライン報酬の割合を上書き
+//     nightPlusMs: ミリ秒                 夜が長くなる
 export const cards = [
   // 🥕 たべもの
   { id: 'glutton',   icon: '🍽️', name: '食いしん坊',     tags: ['food'],   rarity: 'common', desc: 'たべもの系の品物の効果 ×1.5',            effect: { tagMult: { food: 1.5 } } },
@@ -59,28 +59,39 @@ export const cards = [
   // ⚖️ とりひき（尖ったビルド用）
   { id: 'sleepy',    icon: '😴', name: '寝ぼすけ',       tags: ['trade'],  rarity: 'rare',   desc: '毎秒 ×2、でもなでる力 ×0.5',             effect: { perSecMult: 2, clickMult: 0.5 } },
   { id: 'eager',     icon: '🔥', name: 'はりきり',       tags: ['trade'],  rarity: 'rare',   desc: 'なでる力 ×3、でも毎秒 ×0.6',             effect: { clickMult: 3, perSecMult: 0.6 } },
-  { id: 'housesit',  icon: '🏡', name: 'おるすばん上手', tags: ['trade'],  rarity: 'common', desc: 'オフライン報酬が 50% → 100%',            effect: { offlineRate: 1 } }
+  { id: 'nightowl',  icon: '🦉', name: '夜ふかし',       tags: ['home'],   rarity: 'common', desc: '夜が5秒長くなる',                        effect: { nightPlusMs: 5000 } }
 ];
 
 export const rarityWeight = { common: 60, rare: 30 };
 
-// この周で集めたハートがこれを越えるたびに、おやつカードを1枚選べる
-export const draftThresholds = [100, 1e3, 1e4, 5e4, 2e5, 1e6, 5e6, 2e7, 1e8, 5e8, 2e9, 1e10];
-
-// お引っ越し
-export const move = {
-  minEarned: 1e6,            // この周でこれだけ集めたらお引っ越しできる
-  memoryScale: 10,           // 思い出 = scale × (集めたハート / 100万) の立方根
-  baseChoices: 3,            // おやつカードの選択肢の数
-  baseRerolls: 0             // 1周あたりの引き直し回数
+// 冬ごもり：夜ごとに寒波が来て、夜の終わりにノルマ分のハートを払う。払えなければ終わり
+//   ms: 夜の長さ / quota: ノルマ
+export const winter = {
+  nights: [
+    // ノルマは夜ごとに約5倍。買い物で伸びるぶん、寒波も強くなる
+    { ms: 60000, quota: 40 },
+    { ms: 60000, quota: 250 },
+    { ms: 60000, quota: 1500 },
+    { ms: 60000, quota: 8000 },
+    { ms: 75000, quota: 40000, boss: true }   // 大寒波
+  ],
+  baseChoices: 3,       // おやつカードの選択肢の数
+  baseRerolls: 0,       // 1回の冬で引き直せる回数
+  memoriesPerNight: 1,  // 越えた夜1つにつきもらえる思い出
+  clearBonus: 5         // 冬を越えたときのおまけ
 };
 
-// 思い出ショップ（周回をまたいで残る）。level があるものは何回か買える
+// 思い出ショップ（何回遊んでも残る）。cost が配列のものは何回か買える
 export const metaUnlocks = [
-  { id: 'starter', icon: '🎁', name: '引っ越し祝い',     desc: '牧草5・にんじん3を持って周回を始める', cost: 10 },
-  { id: 'reroll',  icon: '🔄', name: 'ひきなおし',       desc: '1周に1回、おやつカードを引き直せる（重ねがけ可）', cost: [15, 45, 120] },
-  { id: 'early',   icon: '🍪', name: 'おやつの前借り',   desc: '周回の最初からおやつカードを1枚選べる', cost: 25 },
-  { id: 'choice',  icon: '🃏', name: 'よくばり',         desc: 'おやつカードの選択肢が4枚になる', cost: 40 },
-  { id: 'rare',    icon: '💎', name: 'めききの目',       desc: 'レアカードが出やすくなる', cost: 50 },
-  { id: 'boost',   icon: '💗', name: '思い出の力',       desc: '全体 +10%（重ねがけ可）', cost: [20, 60, 150, 400] }
+  { id: 'item_house',   icon: '🏠', name: 'おうちを建てる',   desc: 'ショップに「おうち」（毎秒 +10）が並ぶ', cost: 3 },
+  { id: 'starter',      icon: '🎁', name: 'ごはんのおすそわけ', desc: '牧草2つを持って冬ごもりを始める', cost: 3 },
+  { id: 'longnight',    icon: '⏳', name: '長い夜',           desc: '夜が5秒長くなる（重ねがけ可）', cost: [4, 8, 15] },
+  { id: 'reroll',       icon: '🔄', name: 'ひきなおし',       desc: '1回の冬で1回、おやつを引き直せる（重ねがけ可）', cost: [5, 12, 25] },
+  { id: 'item_brush',   icon: '✨', name: 'ブラシを買う',     desc: 'ショップに「ブラッシング」（なでる力 +10）が並ぶ', cost: 6 },
+  { id: 'boost',        icon: '💗', name: '思い出の力',       desc: '全体 +10%（重ねがけ可）', cost: [6, 15, 30, 60] },
+  { id: 'choice',       icon: '🃏', name: 'よくばり',         desc: 'おやつカードの選択肢が4枚になる', cost: 8 },
+  { id: 'early',        icon: '🍪', name: 'おやつの前借り',   desc: '1夜目の前に、おやつカードを1枚えらべる', cost: 10 },
+  { id: 'rare',         icon: '💎', name: 'めききの目',       desc: 'レアカードが出やすくなる', cost: 10 },
+  { id: 'item_garden',  icon: '🌳', name: 'お庭をひろげる',   desc: 'ショップに「ひろいお庭」（毎秒 +40）が並ぶ', cost: 12 },
+  { id: 'item_village', icon: '🏡', name: '村をつくる',       desc: 'ショップに「モルモット村」（毎秒 +150）が並ぶ', cost: 25 }
 ];

@@ -4,12 +4,13 @@ import { formatNumber } from './format.js';
 import { createSound } from './sound.js';
 import { createPig } from './pig.js';
 import { createDecor } from './decor.js';
-import { flyIcon, flyCrumbs, burst, confetti, floatLabel, centerOf } from './effects.js';
+import { flyIcon, flyCrumbs, burst, confetti, floatLabel, centerOf, puff } from './effects.js';
 import { setupMixer } from './mixer.js';
 import { createCounter } from './counter.js';
 import { setupRunUI } from './runui.js';
+import { setupWinterUI } from './winterui.js';
 
-export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
+export function startUI({ data, game, store }) {
   const $ = (id) => document.getElementById(id);
   const el = $('count');
   const pig = $('pig');
@@ -87,7 +88,7 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
       });
     }
     upgRow.hidden = list.length === 0;
-    list.forEach((u) => { upgButtons[u.id].disabled = game.state.count < u.cost; });
+    list.forEach((u) => { upgButtons[u.id].disabled = !game.canShop() || game.state.count < u.cost; });
   }
 
   function makeUpgradeButton(u) {
@@ -155,7 +156,8 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
       const open = game.isUnlocked(it);
       b.hidden = !open;
       if (!open) {
-        if (!nextLocked) { nextLocked = it; }
+        // 思い出ショップで解放していない品物は「？？？」にも出さない
+        if (!nextLocked && game.isAvailable(it)) { nextLocked = it; }
         return;
       }
       const c = game.cost(it);
@@ -166,7 +168,7 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
       b.querySelector('.pr').textContent = '♥ ' + fmt(c);
       const desc = itemDesc(it);
       b.querySelector('.ds').textContent = desc;
-      b.disabled = game.state.count < c;
+      b.disabled = !game.canShop() || game.state.count < c;
       b.setAttribute('aria-label', `${it.name}（${n}こ持っている）${desc}、ハート${fmt(c)}`);
     });
     lockedBtn.hidden = !nextLocked;
@@ -331,6 +333,13 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
   }
 
   function onPet(ev, { drag = false } = {}) {
+    // 夜じゃないとき（作戦タイム）はハートは出ない。モルモットは反応だけする
+    if (!game.isNight()) {
+      animatePig();
+      sound.squeak();
+      if (Math.random() < 0.3) { sayLine(data.restWords[Math.floor(Math.random() * data.restWords.length)]); }
+      return;
+    }
     const gain = game.pet({ drag });
     renderCount();
     counter.pop(gain);
@@ -426,10 +435,16 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
   }
 
   // ---------- きんのにんじん ----------
+  // 夜の時間（⏸ や作戦タイムでは進まない）で数えて、ときどき出す
+  let nightClock = 0;
+  let goldenDue = null;
   function scheduleGolden() {
     const g = data.golden;
     const wait = (g.minWait + Math.random() * (g.maxWait - g.minWait)) * game.goldenWaitMult();
-    setTimeout(() => spawnGolden(false), wait);
+    goldenDue = nightClock + wait;
+  }
+  function clearGolden() {
+    stage.querySelectorAll('.golden').forEach((b) => b.remove());
   }
 
   // manual が true のとき（動作確認用）は、消えたあと次を予約しない
@@ -446,7 +461,7 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
       if (gone) { return; }
       gone = true;
       b.remove();
-      if (!manual) { scheduleGolden(); }
+      if (!manual && game.isNight()) { scheduleGolden(); }
     };
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -526,27 +541,87 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
   });
 
   function afterChange() {
-    runUI.check();
     checkAch();
     refresh();
+    runUI.refreshGift();
+    winterUI.render();
   }
 
-  // ---------- 周回（おやつカード・お引っ越し） ----------
+  // ---------- 冬ごもり（おやつカード・おうち・結果） ----------
   const runUI = setupRunUI({
     data, game, fmt, sound, toast, save, pigSvg,
     onChange: () => { renderCount(); refresh(); checkAch(); },
-    onMoved: () => {
-      // 新しい周：仲間・飾りを片付けて、ショップを最初の状態に
-      herd.innerHTML = '';
-      decor.reset();
-      syncHerd(false);
-      decor.sync(game.ownedOf, false);
-      counter.snap(game.state.count);
+    onNewGame: startNewGame,
+    onGiveUp: () => {
+      const result = game.giveUp();
+      save();
+      if (result) { clearGolden(); runUI.showEnd(result); }
       afterChange();
-      sayLine('新しいおうち！');
-      pigCtl.popcorn();
     }
   });
+
+  // 新しい冬：仲間・飾りを片付けて、ショップを最初の状態に
+  function startNewGame() {
+    game.newGame();
+    herd.innerHTML = '';
+    decor.reset();
+    syncHerd(false);
+    decor.sync(game.ownedOf, false);
+    counter.snap(game.state.count);
+    save();
+    afterChange();
+    sayLine('冬がくる…！');
+    pigCtl.popcorn();
+    if (game.run.pending > 0) { setTimeout(runUI.openDraft, 500); }
+  }
+
+  // ---------- 寒波（メーター・作戦タイム・⏸） ----------
+  const winterUI = setupWinterUI({
+    game, fmt, sound,
+    onStartNight: () => {
+      nightClock = 0;
+      scheduleGolden();
+      save();
+      afterChange();
+    },
+    onPauseChange: () => { lastTick = Date.now(); },
+    onEndEarly: () => { handleEvents(game.endNightEarly()); }
+  });
+
+  // 夜が終わったとき・冬が終わったときの演出
+  function handleEvents(events) {
+    events.forEach((ev) => {
+      if (ev.type === 'nightEnd') {
+        clearGolden();
+        goldenDue = null;
+        if (ev.ok) {
+          // ノルマを払う：ハートが寒波に吸い込まれていく
+          sound.paid();
+          floatLabel('−♥' + fmt(ev.paid) + ' ノルマ', centerOf(el, 1.05, 0.1), 'minus');
+          burst(centerOf(el), { count: 18, spread: 110, chars: ['❄', '✦', '♥'], colors: ['#bfe3ff', '#ffffff', '#ff7a9a'] });
+          renderCount();
+          if (!game.isOver()) {
+            winterUI.show(`❄️ ${ev.night}夜目をのりこえた！`, `ノルマ ♥${fmt(ev.paid)} をはらった`, 'ok');
+            sayLine('ぬくぬく〜！');
+            pigCtl.popcorn();
+            // 夜を越えたら毎回、すぐにおやつを選ぶ（選ぶまで閉じない）
+            setTimeout(() => { if (game.run.pending > 0) { runUI.openDraft(); } }, 900);
+          }
+        } else {
+          sound.lose();
+          winterUI.show('🥶 さむい…！', `ノルマ ♥${fmt(game.quota(ev.night))} に届かなかった`, 'lose');
+          document.body.classList.add('frozen');
+          setTimeout(() => document.body.classList.remove('frozen'), 1500);
+        }
+      }
+      if (ev.type === 'gameEnd') {
+        setTimeout(() => runUI.showEnd(ev.result), ev.result.win ? 1400 : 1600);
+        if (ev.result.win) { sound.move(); confetti(stage.getBoundingClientRect(), { count: 60 }); }
+      }
+    });
+    save();
+    afterChange();
+  }
 
   // ---------- 開始 ----------
   buildShop();
@@ -578,44 +653,48 @@ export function startUI({ data, game, store, offline = { amount: 0, ms: 0 } }) {
     if (drag && drag.moved) { return; } // ドラッグで撫でた直後のクリックは数えない
     onPet(e);
   });
-  scheduleGolden();
 
-  // 実際に経った時間で進める（タブを裏に回してタイマーが間引かれても、生産がずれないように）
+  // ---------- 時間を進める ----------
+  // 夜のあいだだけ進む。⏸・パネルを開いている間・タブが裏のときは止まる
+  // 実際に経った時間で進めるが、一度に進めるのは1秒まで（スリープ明けなどで一気に進まないように）
   let lastTick = Date.now();
+  const frozen = () => winterUI.isPaused() || runUI.anyOpen() || achPanel.classList.contains('open') || document.hidden;
   setInterval(() => {
     const t = Date.now();
-    const ms = Math.min(Math.max(0, t - lastTick), data.offline.maxHours * 3600 * 1000);
+    const ms = Math.min(Math.max(0, t - lastTick), 1000);
     lastTick = t;
-    if (game.tick(ms) > 0) {
-      renderCount();
-      refreshShop();
-      runUI.check();
+    if (game.isNight() && !frozen()) {
+      const before = game.state.count;
+      const events = game.update(ms);
+      nightClock += ms;
+      if (goldenDue != null && nightClock >= goldenDue && game.isNight()) { goldenDue = null; spawnGolden(false); }
+      if (game.state.count !== before) { renderCount(); refreshShop(); }
+      if (events.length) { handleEvents(events); }
     }
     refreshRate();
+    winterUI.render();
   }, data.tickMs);
 
-  // ---------- おかえり（オフライン報酬） ----------
-  function showWelcome() {
-    const panel = $('welcome');
-    const h = Math.floor(offline.ms / 3600000);
-    const m = Math.floor((offline.ms % 3600000) / 60000);
-    const time = (h ? h + '時間' : '') + (m || !h ? m + '分' : '');
-    $('welcomeTime').textContent = time;
-    $('welcomeAmount').textContent = '♥ ' + fmt(offline.amount);
-    panel.classList.add('open');
-    const ok = $('welcomeOk');
-    ok.focus();
-    ok.addEventListener('click', () => {
-      panel.classList.remove('open');
-      counter.pop(offline.amount);
-      burst(centerOf(el), { count: 16, spread: 90 });
-      floatLabel('+♥' + fmt(offline.amount), centerOf(el, 1.05, 0.1), 'plus');
-      sayLine('おかえり〜！');
-      pigCtl.popcorn();
-      sound.land();
-    }, { once: true });
-  }
-  if (offline.amount > 0) { showWelcome(); }
+  // 冬の途中で閉じていたら、⏸ の状態から再開する
+  if (game.isNight()) { winterUI.setPaused(true); scheduleGolden(); }
+  // 終わった冬の結果を見ている途中で閉じていたら、結果をもう一度出す
+  if (game.isOver() && game.run.result) { runUI.showEnd(game.run.result); }
+  // おやつを選ぶ途中で閉じていたら、もう一度開く
+  if (game.run.phase === 'break' && game.run.pending > 0) { setTimeout(runUI.openDraft, 400); }
+  winterUI.render();
+
+  // 寒いと口元から白い息が出る（寒いほど大きく・ひんぱんに）
+  let breathAcc = 0;
+  setInterval(() => {
+    const c = winterUI.coldness();
+    if (c < 0.25 || frozen() || pigSvg.classList.contains('sleeping')) { return; }
+    breathAcc += c;
+    if (breathAcc >= 1) {
+      breathAcc = 0;
+      puff(centerOf(pigSvg, 0.08, 0.56), c);
+    }
+  }, 500);
+
   setInterval(() => { checkAch(); refresh(); save(); }, data.autosaveMs);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { save(); }
