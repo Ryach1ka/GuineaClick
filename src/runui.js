@@ -2,7 +2,7 @@
 
 import { burst, confetti, flyIcon, centerOf } from './effects.js';
 
-export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChange, onNewGame }) {
+export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChange, onNewGame, onAllPicked = () => {} }) {
   const $ = (id) => document.getElementById(id);
   const giftBtn = $('giftBtn');
   const giftCount = $('giftCount');
@@ -115,7 +115,7 @@ export function setupRunUI({ data, game, fmt, sound, toast, save, pigSvg, onChan
     });
     toast(`🎁 ${c.icon} ${c.name}`, c.desc);
     save();
-    if (game.run.pending > 0) { renderDraft(); } else { closePanel(draftPanel); refreshGift(); }
+    if (game.run.pending > 0) { renderDraft(); } else { closePanel(draftPanel); refreshGift(); onAllPicked(); }
     onChange();
   }
 

@@ -19,6 +19,7 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
   const quotaText = $('quotaText');
   const quotaGauge = $('quotaGauge');
   const coldGauge = $('coldGauge');
+  const wHint = $('wHint');
   let paused = false;
   let lastSecond = null;
   let reachedNight = 0; // ノルマ達成を知らせた夜（1夜に1回だけ知らせる）
@@ -118,6 +119,10 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     }
     breakBar.hidden = !showBar;
     document.body.classList.toggle('daytime', isBreak);
+
+    // 枠に何も出ていないときのひとこと（枠の高さは変わらない）
+    wHint.hidden = !clearBtn.hidden || !breakBar.hidden;
+    wHint.textContent = isBreak ? '☀️ 夜が明けた…' : game.isOver() ? '' : enough ? '' : (hurry ? '❄️ 寒波がくる！ いそいで！' : '🫶 なでてハートを集めよう');
     pauseBtn.disabled = !night;
     if (isBreak) {
       $('breakTitle').textContent = n === 1 && r.playMs === 0 ? '❄️ 冬がくる…' : '☀️ 作戦タイム';
@@ -141,14 +146,17 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
     show.t = setTimeout(() => { banner.className = 'banner'; }, 1700);
   }
 
-  nightBtn.addEventListener('click', () => {
-    if (!game.startNight()) { return; }
+  // 夜を始める（ボタンから、またはおやつを選び終わったあと自動で）
+  function beginNight() {
+    if (!game.startNight()) { return false; }
     const n = game.run.night;
     show(nightName(n), `ノルマ ♥${fmt(game.quota(n))}　${Math.round(game.nightMs(n) / 1000)}秒`, n >= game.nightCount() ? 'boss' : '');
     sound.night();
     onStartNight();
     render();
-  });
+    return true;
+  }
+  nightBtn.addEventListener('click', beginNight);
 
   // ---- ⏸ ひとやすみ ----
   function setPaused(p) {
@@ -181,5 +189,5 @@ export function setupWinterUI({ game, fmt, sound, onStartNight, onPauseChange, o
   // 今の寒さ（0〜1）。白い息の大きさなどに使う
   const coldness = () => parseFloat(document.documentElement.style.getPropertyValue('--cold')) || 0;
 
-  return { render, show, setPaused, isPaused: () => paused, coldness, nudge };
+  return { render, show, setPaused, isPaused: () => paused, coldness, nudge, beginNight };
 }

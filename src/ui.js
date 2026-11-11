@@ -569,7 +569,16 @@ export function startUI({ data, game, store }) {
   const runUI = setupRunUI({
     data, game, fmt, sound, toast, save, pigSvg,
     onChange: () => { renderCount(); refresh(); checkAch(); },
-    onNewGame: startNewGame
+    onNewGame: startNewGame,
+    // おやつを選び終わったら、少し間をおいて自動で次の夜へ（1夜目の前は自分でボタンを押す）
+    onAllPicked: () => {
+      if (game.run.phase !== 'break' || game.run.night <= 1) { return; }
+      setTimeout(() => {
+        if (game.run.phase === 'break' && game.run.pending === 0 && !document.querySelector('.overlay.open')) {
+          winterUI.beginNight();
+        }
+      }, 1000);
+    }
   });
 
   // ---------- ☰ メニュー ----------

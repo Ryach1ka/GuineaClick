@@ -420,3 +420,19 @@ body.daytime .score .n{opacity:.75}
 .help-list .hi{font-size:1.4rem; line-height:1.2}
 .help-list b{display:block; font-size:.92rem}
 .help-tip{font-size:.78rem; color:var(--muted); margin:.7rem 0 0}
+
+/* 寒波メーターの下の枠：高さを決めておき、中身（夜をおえる／作戦タイム／ひとこと）を重ねて入れ替える */
+.w-slot{position:relative; height:52px; margin-top:.45rem}
+.w-slot > *{position:absolute; inset:0; margin:0 !important}
+.w-slot .clear-btn{height:100%}
+.w-slot .breakbar{height:100%; overflow:hidden; flex-wrap:nowrap; padding:.3rem .5rem}
+.w-slot .bb-text{min-width:0}
+.w-slot .bb-text b, .w-slot .bb-text small{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.w-slot .breakbar .primary{padding:.5rem .9rem; font-size:.88rem; white-space:nowrap}
+.w-hint{display:flex; align-items:center; justify-content:center; font-size:.82rem; font-weight:700; color:var(--muted)}
+
+/* 数字の下の説明は1行に固定（長さが変わっても下が動かない） */
+.score .l{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:calc(100vw - 32px); height:1.5em; line-height:1.5em}
+
+/* ショップの高さを固定（品物や強化が増えてもステージが縮まない。中だけスクロール） */
+.shop{height:min(38vh, 330px); max-height:none; flex:none}
