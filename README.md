@@ -2,6 +2,12 @@
 
 モルモットをなでてハートを集めるクリッカーゲーム。
 
+**▶ あそぶ：https://ryach1ka.github.io/GuineaClick/**（ブラウザで開くだけ。スマホでも遊べます）
+
+## 公開のしくみ
+
+`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がテストとビルドをして、GitHub Pages に自動で公開する。テストが失敗したときは公開されない。
+
 ## 使い方
 
 最初に1回だけ、必要なパッケージを入れる：
